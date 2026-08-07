@@ -1356,17 +1356,31 @@
         </div>
       </div>
 
-      <!-- Section 3: Charts -->
+      <!-- Section 3: Interactive Animated Visuals (Consumption, Cost, EPI & Savings) -->
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; margin-bottom:2rem;">
         <div class="chart-container-card">
-          <div class="chart-title"><i data-lucide="line-chart"></i> Monthly Consumption Trend (2025 vs 2026)</div>
+          <div class="chart-title"><i data-lucide="line-chart" style="color:#60a5fa;"></i> Monthly Consumption Trend (2025 vs 2026 kWh)</div>
           <div style="position:relative; height:280px;">
             <canvas id="chart-monthly-trend"></canvas>
           </div>
         </div>
 
         <div class="chart-container-card">
-          <div class="chart-title"><i data-lucide="pie-chart"></i> YTD YoY Energy Component Savings Breakdown</div>
+          <div class="chart-title"><i data-lucide="circle-dollar-sign" style="color:#34d399;"></i> Monthly Energy Cost Trend (2025 vs 2026 ₹)</div>
+          <div style="position:relative; height:280px;">
+            <canvas id="chart-cost-trend"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-container-card">
+          <div class="chart-title"><i data-lucide="trending-down" style="color:#00e5ff;"></i> EPI Performance Trend vs 2025 Benchmark (kWh/m²/yr)</div>
+          <div style="position:relative; height:280px;">
+            <canvas id="chart-epi-trend"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-container-card">
+          <div class="chart-title"><i data-lucide="pie-chart" style="color:#fbbf24;"></i> YTD YoY Energy Component Net Cost Savings (₹)</div>
           <div style="position:relative; height:280px;">
             <canvas id="chart-yoy-breakdown"></canvas>
           </div>
@@ -1709,6 +1723,7 @@
   function renderAdminCharts() {
     if (!window.Chart) return;
 
+    // 1. Monthly Consumption Trend Chart
     const trendCtx = document.getElementById('chart-monthly-trend');
     if (trendCtx) {
       new Chart(trendCtx, {
@@ -1720,16 +1735,16 @@
               label: '2025 Cons (kWh)',
               data: [71247, 74823, 83562, 91430, 94164, 105721, 114327],
               borderColor: '#94a3b8',
-              backgroundColor: 'rgba(148, 163, 184, 0.1)',
-              tension: 0.3,
+              backgroundColor: 'rgba(148, 163, 184, 0.12)',
+              tension: 0.35,
               fill: true
             },
             {
               label: '2026 Cons (kWh)',
               data: [78876, 77805, 80041, 80188, 76356, 82334, 76338],
-              borderColor: '#10b981',
-              backgroundColor: 'rgba(16, 185, 129, 0.2)',
-              tension: 0.3,
+              borderColor: '#34d399',
+              backgroundColor: 'rgba(52, 211, 153, 0.25)',
+              tension: 0.35,
               fill: true
             }
           ]
@@ -1737,17 +1752,120 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: {
-            legend: { labels: { color: '#9ca3af' } }
-          },
+          animation: { duration: 1200, easing: 'easeInOutQuart' },
+          plugins: { legend: { labels: { color: '#cbd5e1' } } },
           scales: {
-            x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-            y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+            x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
           }
         }
       });
     }
 
+    # 2. Monthly Energy Cost Trend Chart
+    const costCtx = document.getElementById('chart-cost-trend');
+    if (costCtx) {
+      new Chart(costCtx, {
+        type: 'line',
+        data: {
+          labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+          datasets: [
+            {
+              label: '2025 Cost (₹)',
+              data: [530790, 557431, 622537, 681153, 701523, 787622, 851500],
+              borderColor: '#ef4444',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              tension: 0.35,
+              fill: true,
+              borderDash: [5, 5]
+            },
+            {
+              label: '2026 Cost (₹)',
+              data: [587626, 579649, 596305, 597400, 568852, 613388, 568720],
+              borderColor: '#60a5fa',
+              backgroundColor: 'rgba(96, 165, 250, 0.25)',
+              tension: 0.35,
+              fill: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 1300, easing: 'easeInOutQuart' },
+          plugins: { legend: { labels: { color: '#cbd5e1' } } },
+          scales: {
+            x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { 
+              ticks: { 
+                color: '#94a3b8',
+                callback: function(v) { return '₹' + (v/100000).toFixed(1) + 'L'; }
+              }, 
+              grid: { color: 'rgba(255,255,255,0.05)' } 
+            }
+          }
+        }
+      });
+    }
+
+    # 3. EPI Trend vs 2025 Benchmark Chart
+    const epiCtx = document.getElementById('chart-epi-trend');
+    if (epiCtx) {
+      new Chart(epiCtx, {
+        type: 'line',
+        data: {
+          labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+          datasets: [
+            {
+              label: '2025 EPI (kWh/m²/yr)',
+              data: [93.7, 98.4, 109.9, 120.2, 123.8, 139.0, 150.4],
+              borderColor: '#f59e0b',
+              backgroundColor: 'rgba(245, 158, 11, 0.1)',
+              tension: 0.35,
+              fill: false
+            },
+            {
+              label: '2026 EPI (kWh/m²/yr)',
+              data: [103.7, 102.3, 105.3, 105.5, 100.4, 108.3, 100.4],
+              borderColor: '#00e5ff',
+              backgroundColor: 'rgba(0, 229, 255, 0.25)',
+              tension: 0.35,
+              fill: true
+            },
+            {
+              label: '2025 Benchmark Avg (119.4)',
+              data: [119.4, 119.4, 119.4, 119.4, 119.4, 119.4, 119.4],
+              borderColor: '#ef4444',
+              borderDash: [6, 4],
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: false
+            },
+            {
+              label: 'DT3 Best-in-Class Target (<120)',
+              data: [120, 120, 120, 120, 120, 120, 120],
+              borderColor: '#10b981',
+              borderDash: [2, 2],
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 1400, easing: 'easeInOutQuart' },
+          plugins: { legend: { labels: { color: '#cbd5e1' } } },
+          scales: {
+            x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+          }
+        }
+      });
+    }
+
+    # 4. YTD YoY Energy Component Net Cost Savings Chart
     const yoyCtx = document.getElementById('chart-yoy-breakdown');
     if (yoyCtx) {
       new Chart(yoyCtx, {
@@ -1763,12 +1881,17 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false }
-          },
+          animation: { duration: 1000, easing: 'easeInOutQuart' },
+          plugins: { legend: { display: false } },
           scales: {
-            x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-            y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+            x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { 
+              ticks: { 
+                color: '#94a3b8',
+                callback: function(v) { return '₹' + (v/1000).toFixed(0) + 'k'; }
+              }, 
+              grid: { color: 'rgba(255,255,255,0.05)' } 
+            }
           }
         }
       });

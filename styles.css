@@ -714,38 +714,47 @@ body {
   background: var(--bg-card);
 }
 
-/* Sticky First 4 Columns for Freeze Pane */
+/* Sticky First 4 Columns for Freeze Pane (Zero Overlap) */
 .data-table th:nth-child(1),
 .data-table td:nth-child(1) {
   position: sticky;
   left: 0;
-  z-index: 5;
-  background: #0f172a;
+  z-index: 8;
+  background: #0f172a !important;
+  min-width: 50px;
+  width: 50px;
 }
 
 .data-table th:nth-child(2),
 .data-table td:nth-child(2) {
   position: sticky;
-  left: 55px;
-  z-index: 5;
-  background: #0f172a;
+  left: 50px;
+  z-index: 8;
+  background: #0f172a !important;
+  min-width: 60px;
+  width: 60px;
 }
 
 .data-table th:nth-child(3),
 .data-table td:nth-child(3) {
   position: sticky;
   left: 110px;
-  z-index: 5;
-  background: #0f172a;
+  z-index: 8;
+  background: #0f172a !important;
+  min-width: 220px;
+  width: 220px;
 }
 
 .data-table th:nth-child(4),
 .data-table td:nth-child(4) {
   position: sticky;
-  left: 310px;
-  z-index: 5;
-  background: #0f172a;
-  box-shadow: 3px 0 6px rgba(0, 0, 0, 0.4);
+  left: 330px;
+  z-index: 8;
+  background: #0f172a !important;
+  min-width: 120px;
+  width: 120px;
+  border-right: 2px solid #3b82f6 !important;
+  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.7);
 }
 
 /* Top-Left Frozen Header Intersections */
@@ -753,8 +762,8 @@ body {
 .data-table thead tr th:nth-child(2),
 .data-table thead tr th:nth-child(3),
 .data-table thead tr th:nth-child(4) {
-  z-index: 20;
-  background: #1e293b;
+  z-index: 25;
+  background: #1e293b !important;
 }
 
 .data-table tr:hover td {
