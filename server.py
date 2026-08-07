@@ -161,7 +161,7 @@ class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
 
             kwh_daily = tracker_data.get('kwh_daily', {})
 
-            # Map all date columns across month sheets
+            # Map all date columns across month sheets & set freeze panes
             date_to_sheet_col = {}
             sheet_row_maps = {}
 
@@ -171,6 +171,9 @@ class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
                 sheet = wb[sheetname]
                 if hasattr(sheet, 'sheet_view') and sheet.sheet_view:
                     sheet.sheet_view.showGridLines = True
+
+                # Freeze panes at column E (Row 6) so Date, Day, Time and Headers stay frozen
+                sheet.freeze_panes = 'E6'
 
                 m_rows, c_rows = scan_dt3_sheet_rows(sheet)
                 sheet_row_maps[sheetname] = (m_rows, c_rows)
@@ -334,6 +337,8 @@ class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
                 if sheetname in ['INDEX & CONTROL PANEL', 'Executive Dashboard']:
                     continue
 
+                sheet.freeze_panes = 'C7'
+
                 date_row_map = {}
                 for r in range(7, sheet.max_row + 1):
                     val = sheet.cell(r, 1).value
@@ -378,5 +383,5 @@ if __name__ == '__main__':
     ensure_master_templates()
     handler = EnergyTrackerHandler
     with socketserver.TCPServer(("", PORT), handler) as httpd:
-        print(f"Energy Tracker Server running on port {PORT} with dynamic row-scanning engine...")
+        print(f"Energy Tracker Server running on port {PORT} with freeze panes engine...")
         httpd.serve_forever()

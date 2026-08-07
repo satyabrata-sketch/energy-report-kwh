@@ -674,29 +674,36 @@ body {
   box-shadow: 0 15px 40px rgba(0, 229, 255, 0.6);
 }
 
-/* Data Table Styling */
+/* Data Table Styling with Sticky Freeze Panes */
 .table-responsive-container {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: 70vh;
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
   margin-bottom: 2rem;
+  position: relative;
 }
 
 .data-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   text-align: left;
   font-size: calc(0.85rem * var(--font-scale));
 }
 
 .data-table th {
-  background: rgba(15, 23, 42, 0.9);
+  background: #0f172a;
   color: var(--text-muted);
   font-weight: 700;
   padding: 0.8rem 1rem;
   border-bottom: 1px solid var(--border-highlight);
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
 }
 
 .data-table td {
@@ -704,14 +711,58 @@ body {
   border-bottom: 1px solid var(--border-color);
   color: var(--text-main);
   white-space: nowrap;
+  background: var(--bg-card);
+}
+
+/* Sticky First 4 Columns for Freeze Pane */
+.data-table th:nth-child(1),
+.data-table td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background: #0f172a;
+}
+
+.data-table th:nth-child(2),
+.data-table td:nth-child(2) {
+  position: sticky;
+  left: 55px;
+  z-index: 5;
+  background: #0f172a;
+}
+
+.data-table th:nth-child(3),
+.data-table td:nth-child(3) {
+  position: sticky;
+  left: 110px;
+  z-index: 5;
+  background: #0f172a;
+}
+
+.data-table th:nth-child(4),
+.data-table td:nth-child(4) {
+  position: sticky;
+  left: 310px;
+  z-index: 5;
+  background: #0f172a;
+  box-shadow: 3px 0 6px rgba(0, 0, 0, 0.4);
+}
+
+/* Top-Left Frozen Header Intersections */
+.data-table thead tr th:nth-child(1),
+.data-table thead tr th:nth-child(2),
+.data-table thead tr th:nth-child(3),
+.data-table thead tr th:nth-child(4) {
+  z-index: 20;
+  background: #1e293b;
 }
 
 .data-table tr:hover td {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .data-table tr.total-row td {
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
   font-weight: 800;
   color: #fff;
   border-top: 2px solid var(--border-highlight);
