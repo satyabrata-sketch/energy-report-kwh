@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AHU & Daily KWH Energy Tracker | CBRE Operational Facility Management</title>
+  <meta name="description" content="Operational AHU Saving Tracker and Daily KWH Energy Consumption Manager for EB, AHU, and BTU meter readings with auto-fetching previous day readings and Excel exports.">
+  
+  <!-- Modern Google Font: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Main App Root -->
+  <div id="app"></div>
+
+  <!-- Local Standalone Libraries -->
+  <script src="lib/lucide.min.js"></script>
+  <script src="lib/xlsx.full.min.js"></script>
+  <script src="lib/chart.umd.js"></script>
+
+  <!-- Application Modules -->
+  <script src="seedData.js"></script>
+  <script src="excelExporter.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

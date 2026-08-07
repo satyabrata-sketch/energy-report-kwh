@@ -1,0 +1,2438 @@
+{
+  "2024-03-01": {
+    "eb": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 6604
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 165,
+        "prev_dg_reading": 1956
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 28,
+        "prev_dg_reading": 16819
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 352,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 0,
+        "prev_dg_reading": 2670
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 76,
+        "prev_dg_reading": 7208
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 171,
+        "prev_dg_reading": 29055
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 733,
+        "prev_dg_reading": 12402
+      }
+    ],
+    "ahu": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 2568
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 132,
+        "prev_dg_reading": 2698
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 146,
+        "prev_dg_reading": 1243
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 110,
+        "prev_dg_reading": 1283
+      }
+    ],
+    "btu": [
+      {
+        "meter": null,
+        "prev_reading": null
+      },
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 5741.69
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 6755.88
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 4835
+      }
+    ]
+  },
+  "2024-04-01": {
+    "eb": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 13613
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 278,
+        "prev_dg_reading": 1956
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 28,
+        "prev_dg_reading": 26440
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 517,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 0,
+        "prev_dg_reading": 7150
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 159,
+        "prev_dg_reading": 13012
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 300,
+        "prev_dg_reading": 53008
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1088,
+        "prev_dg_reading": 15438
+      }
+    ],
+    "ahu": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 5270
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 173,
+        "prev_dg_reading": 4964
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 178,
+        "prev_dg_reading": 2862
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 129,
+        "prev_dg_reading": 3542
+      }
+    ],
+    "btu": [
+      {
+        "meter": null,
+        "prev_reading": null
+      },
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 20397.69
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 21181.85
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 15520.6
+      }
+    ]
+  },
+  "2024-05-01": {
+    "eb": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 20652
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 328,
+        "prev_dg_reading": 1956
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 28,
+        "prev_dg_reading": 36049
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 588,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 0,
+        "prev_dg_reading": 11588
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 196,
+        "prev_dg_reading": 19531
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 353,
+        "prev_dg_reading": 75336
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1226,
+        "prev_dg_reading": 17963
+      }
+    ],
+    "ahu": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 7266
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 184,
+        "prev_dg_reading": 6581
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 194,
+        "prev_dg_reading": 4607
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 140,
+        "prev_dg_reading": 4928
+      }
+    ],
+    "btu": [
+      {
+        "meter": null,
+        "prev_reading": null
+      },
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 39808.33
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 39039.43
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 34466.31
+      }
+    ]
+  },
+  "2024-06-01": {
+    "eb": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 27418
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1040,
+        "prev_dg_reading": 1956
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 28,
+        "prev_dg_reading": 45249
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1649,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 0,
+        "prev_dg_reading": 15905
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 746,
+        "prev_dg_reading": 26115
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1209,
+        "prev_dg_reading": 94630
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3299,
+        "prev_dg_reading": 20693
+      }
+    ],
+    "ahu": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 9012
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 555,
+        "prev_dg_reading": 8291
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 557,
+        "prev_dg_reading": 6422
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 513,
+        "prev_dg_reading": 6551
+      }
+    ],
+    "btu": [
+      {
+        "meter": null,
+        "prev_reading": null
+      },
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 62776
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 62028
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 59574
+      }
+    ]
+  },
+  "2024-07-01": {
+    "eb": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 33984
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1753,
+        "prev_dg_reading": 1956
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 28.6,
+        "prev_dg_reading": 54227
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 2701,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 0,
+        "prev_dg_reading": 20339
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1311,
+        "prev_dg_reading": 31779
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1999,
+        "prev_dg_reading": 109964
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 5120,
+        "prev_dg_reading": 23959
+      }
+    ],
+    "ahu": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 10907
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 895,
+        "prev_dg_reading": 10321
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 903,
+        "prev_dg_reading": 8764
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 923,
+        "prev_dg_reading": 8579
+      }
+    ],
+    "btu": [
+      {
+        "meter": null,
+        "prev_reading": null
+      },
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 83302.6
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 84127.73
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 87129.6
+      }
+    ]
+  },
+  "2024-08-01": {
+    "eb": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 41074
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 2322,
+        "prev_dg_reading": 1956
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 28.6,
+        "prev_dg_reading": 63982
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3540,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 0,
+        "prev_dg_reading": 25219
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1771,
+        "prev_dg_reading": 37338
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 2510,
+        "prev_dg_reading": 127802
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 6554,
+        "prev_dg_reading": 27550
+      }
+    ],
+    "ahu": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 13170
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1153,
+        "prev_dg_reading": 12367
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1175,
+        "prev_dg_reading": 11346
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1218,
+        "prev_dg_reading": 10968
+      }
+    ],
+    "btu": [
+      {
+        "meter": null,
+        "prev_reading": null
+      },
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 105491.36
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 106652.85
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 113637.95
+      }
+    ]
+  },
+  "2024-09-01": {
+    "eb": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 48175
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 2836,
+        "prev_dg_reading": 1956
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 28.6,
+        "prev_dg_reading": 73860
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 4287,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 0,
+        "prev_dg_reading": 29957
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 2151,
+        "prev_dg_reading": 42580
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 2930,
+        "prev_dg_reading": 145691
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 7987,
+        "prev_dg_reading": 31846
+      }
+    ],
+    "ahu": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 15229
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1394,
+        "prev_dg_reading": 14037
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1377,
+        "prev_dg_reading": 13582
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1472,
+        "prev_dg_reading": 13023
+      }
+    ],
+    "btu": [
+      {
+        "meter": null,
+        "prev_reading": null
+      },
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 125611
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 129491
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 136638
+      }
+    ]
+  },
+  "2024-10-01": {
+    "eb": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 54816
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3578,
+        "prev_dg_reading": 1956
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 28.6,
+        "prev_dg_reading": 83064
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 5395,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 0,
+        "prev_dg_reading": 34422
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 2751,
+        "prev_dg_reading": 47463
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3663,
+        "prev_dg_reading": 162234
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 9950,
+        "prev_dg_reading": 35970
+      }
+    ],
+    "ahu": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 17175
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1779,
+        "prev_dg_reading": 16020
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1735,
+        "prev_dg_reading": 15531
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1826,
+        "prev_dg_reading": 14836
+      }
+    ],
+    "btu": [
+      {
+        "meter": null,
+        "prev_reading": null
+      },
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 144022
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 152135
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 158977
+      }
+    ]
+  },
+  "2024-11-01": {
+    "eb": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 62276
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3678,
+        "prev_dg_reading": 1956
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 28.6,
+        "prev_dg_reading": 93430
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 5538,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 0,
+        "prev_dg_reading": 39703
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 2826,
+        "prev_dg_reading": 53462
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3732,
+        "prev_dg_reading": 180492
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 10150,
+        "prev_dg_reading": 39721
+      }
+    ],
+    "ahu": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 19096
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1804,
+        "prev_dg_reading": 18091
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1758,
+        "prev_dg_reading": 17608
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1854,
+        "prev_dg_reading": 16687
+      }
+    ],
+    "btu": [
+      {
+        "meter": null,
+        "prev_reading": null
+      },
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 159746
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 171381
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 176009
+      }
+    ]
+  },
+  "2024-12-01": {
+    "eb": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 69543
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3790,
+        "prev_dg_reading": 1956
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 28.6,
+        "prev_dg_reading": 103577
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 5686,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 0,
+        "prev_dg_reading": 44885
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 2886,
+        "prev_dg_reading": 59104
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3794,
+        "prev_dg_reading": 197767
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 10303,
+        "prev_dg_reading": 42702
+      }
+    ],
+    "ahu": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 20893
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1811,
+        "prev_dg_reading": 19914
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1764,
+        "prev_dg_reading": 19597
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1858,
+        "prev_dg_reading": 18702
+      }
+    ],
+    "btu": [
+      {
+        "meter": null,
+        "prev_reading": null
+      },
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 172072
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 185120
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 188463
+      }
+    ]
+  },
+  "2026-07-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 210307,
+        "prev_dg_reading": 4486
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 303867,
+        "prev_dg_reading": 6713
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 160838,
+        "prev_dg_reading": 3459
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 179845,
+        "prev_dg_reading": 4490
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 582999,
+        "prev_dg_reading": 12192
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 113483,
+        "prev_dg_reading": 2332
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 62404,
+        "prev_dg_reading": 2004
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 64476,
+        "prev_dg_reading": 2013
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 77898,
+        "prev_dg_reading": 2166
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 52893,
+        "prev_dg_reading": 1884
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 448252
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 421761
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 458458
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 509335
+      }
+    ]
+  },
+  "2026-06-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 203246,
+        "prev_dg_reading": 4343
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 293912,
+        "prev_dg_reading": 6492
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 155368,
+        "prev_dg_reading": 3327
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 173457,
+        "prev_dg_reading": 4311
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 565472,
+        "prev_dg_reading": 11782
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 109469,
+        "prev_dg_reading": 2240
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 60602,
+        "prev_dg_reading": 1992
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 62620,
+        "prev_dg_reading": 1945
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 75704,
+        "prev_dg_reading": 2075
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 51063,
+        "prev_dg_reading": 1793
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 436512
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 410185
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 444498
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 489616
+      }
+    ]
+  },
+  "2026-05-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 196078,
+        "prev_dg_reading": 4329
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 283914,
+        "prev_dg_reading": 6472
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 149904,
+        "prev_dg_reading": 3316
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 166898,
+        "prev_dg_reading": 4297
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 548563,
+        "prev_dg_reading": 11747
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 105288,
+        "prev_dg_reading": 2232
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 59001,
+        "prev_dg_reading": 1923
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 61050,
+        "prev_dg_reading": 1911
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 73971,
+        "prev_dg_reading": 2068
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 49701,
+        "prev_dg_reading": 1788
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 426274
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 400631
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 431431
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 473317
+      }
+    ]
+  },
+  "2026-04-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 188707,
+        "prev_dg_reading": 4329
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 273490,
+        "prev_dg_reading": 6472
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 143732,
+        "prev_dg_reading": 3316
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 160213,
+        "prev_dg_reading": 4297
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 528403,
+        "prev_dg_reading": 11747
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 101290,
+        "prev_dg_reading": 2232
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 56137,
+        "prev_dg_reading": 1923
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 58488,
+        "prev_dg_reading": 1911
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 71032,
+        "prev_dg_reading": 2068
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 47765,
+        "prev_dg_reading": 1788
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 414628
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 390121
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 417583
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 456076
+      }
+    ]
+  },
+  "2026-03-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 181312,
+        "prev_dg_reading": 4283
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 263065,
+        "prev_dg_reading": 6410
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 137256,
+        "prev_dg_reading": 3280
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 153569,
+        "prev_dg_reading": 4265
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 506717,
+        "prev_dg_reading": 11614
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 97629,
+        "prev_dg_reading": 2214
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 52703,
+        "prev_dg_reading": 1923
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 55794,
+        "prev_dg_reading": 1911
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 68469,
+        "prev_dg_reading": 2068
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 45373,
+        "prev_dg_reading": 1788
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 403490
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 378984
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 406367
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 440357
+      }
+    ]
+  },
+  "2026-02-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 174539,
+        "prev_dg_reading": 4283
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 253441,
+        "prev_dg_reading": 6410
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 131062,
+        "prev_dg_reading": 3280
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 147456,
+        "prev_dg_reading": 4265
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 486295,
+        "prev_dg_reading": 11614
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 94542,
+        "prev_dg_reading": 2214
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 49293,
+        "prev_dg_reading": 1923
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 52906,
+        "prev_dg_reading": 1911
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 65921,
+        "prev_dg_reading": 2068
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 43502,
+        "prev_dg_reading": 1788
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 394335
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 370360
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 398878
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 428437
+      }
+    ]
+  },
+  "2026-01-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 167218,
+        "prev_dg_reading": 4281
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 243129,
+        "prev_dg_reading": 6407
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 124335,
+        "prev_dg_reading": 3278
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 141339,
+        "prev_dg_reading": 4262
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 464366,
+        "prev_dg_reading": 11607
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 91210,
+        "prev_dg_reading": 2213
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 45884,
+        "prev_dg_reading": 1921
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 49831,
+        "prev_dg_reading": 1909
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 61348,
+        "prev_dg_reading": 2065
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 41608,
+        "prev_dg_reading": 1786
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 388786
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 364801
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 391409
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 421615
+      }
+    ]
+  },
+  "2025-12-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 160014,
+        "prev_dg_reading": 4279
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 232941,
+        "prev_dg_reading": 6406
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 117671,
+        "prev_dg_reading": 3277
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 135314,
+        "prev_dg_reading": 4262
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 442589,
+        "prev_dg_reading": 11604
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 87969,
+        "prev_dg_reading": 2212
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 43073,
+        "prev_dg_reading": 1921
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 47109,
+        "prev_dg_reading": 1909
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 55482,
+        "prev_dg_reading": 2065
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 39556,
+        "prev_dg_reading": 1786
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 381319
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 358128
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 379512
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 412336
+      }
+    ]
+  },
+  "2025-11-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 152751,
+        "prev_dg_reading": 4279
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 222574,
+        "prev_dg_reading": 6406
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 110988,
+        "prev_dg_reading": 3276
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 129622,
+        "prev_dg_reading": 4262
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 421416,
+        "prev_dg_reading": 11604
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 84560,
+        "prev_dg_reading": 2212
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 40295,
+        "prev_dg_reading": 1921
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 44440,
+        "prev_dg_reading": 1909
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 49792,
+        "prev_dg_reading": 2065
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 37838,
+        "prev_dg_reading": 1786
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 372385
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 349743
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 366099
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 399618
+      }
+    ]
+  },
+  "2025-10-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 145003,
+        "prev_dg_reading": 4278
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 211463,
+        "prev_dg_reading": 6403
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 104459,
+        "prev_dg_reading": 3276
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 123060,
+        "prev_dg_reading": 4261
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 399411,
+        "prev_dg_reading": 11600
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 80798,
+        "prev_dg_reading": 2212
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 37637,
+        "prev_dg_reading": 1921
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 41922,
+        "prev_dg_reading": 1909
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 45953,
+        "prev_dg_reading": 2065
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 35709,
+        "prev_dg_reading": 1786
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 360811
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 338439
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 353063
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 381662
+      }
+    ]
+  },
+  "2025-09-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 137403,
+        "prev_dg_reading": 4175
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 200443,
+        "prev_dg_reading": 6242
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 97925,
+        "prev_dg_reading": 3188
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 116441,
+        "prev_dg_reading": 4155
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 378252,
+        "prev_dg_reading": 11338
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 76796,
+        "prev_dg_reading": 2164
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 34660,
+        "prev_dg_reading": 1882
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 38471,
+        "prev_dg_reading": 1861
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 41989,
+        "prev_dg_reading": 2016
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 33144,
+        "prev_dg_reading": 1744
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 345400
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 320953
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 335256
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 358992
+      }
+    ]
+  },
+  "2025-08-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 129726,
+        "prev_dg_reading": 4175
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 189365,
+        "prev_dg_reading": 6242
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 91678,
+        "prev_dg_reading": 3188
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 110040,
+        "prev_dg_reading": 4155
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 357388,
+        "prev_dg_reading": 11338
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 72776,
+        "prev_dg_reading": 2164
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 31560,
+        "prev_dg_reading": 1882
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 35090,
+        "prev_dg_reading": 1861
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 38186,
+        "prev_dg_reading": 2016
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 30931,
+        "prev_dg_reading": 1744
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 322263
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 300479
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 312610
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 337491
+      }
+    ]
+  },
+  "2025-07-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 121887,
+        "prev_dg_reading": 4176
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 177601,
+        "prev_dg_reading": 6242
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 85219,
+        "prev_dg_reading": 3188
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 103012,
+        "prev_dg_reading": 4155
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 335272,
+        "prev_dg_reading": 11338
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 68756,
+        "prev_dg_reading": 2164
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 29197,
+        "prev_dg_reading": 1882
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 31895,
+        "prev_dg_reading": 1861
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 34710,
+        "prev_dg_reading": 2016
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 28719,
+        "prev_dg_reading": 1744
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 291798
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 279049
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 283579
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 309779
+      }
+    ]
+  },
+  "2025-06-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 114025,
+        "prev_dg_reading": 4136
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 166335,
+        "prev_dg_reading": 6189
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 79294,
+        "prev_dg_reading": 3162
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 96236,
+        "prev_dg_reading": 4135
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 315463,
+        "prev_dg_reading": 11237
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 64289,
+        "prev_dg_reading": 2136
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 27563,
+        "prev_dg_reading": 1878
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 29426,
+        "prev_dg_reading": 1857
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 31727,
+        "prev_dg_reading": 2005
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 26464,
+        "prev_dg_reading": 1739
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 264315
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 258287
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 257817
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 283828
+      }
+    ]
+  },
+  "2025-05-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 106913,
+        "prev_dg_reading": 4118
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 156211,
+        "prev_dg_reading": 6164
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 73751,
+        "prev_dg_reading": 3149
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 89738,
+        "prev_dg_reading": 4115
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 295586,
+        "prev_dg_reading": 11189
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 59619,
+        "prev_dg_reading": 2128
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 26337,
+        "prev_dg_reading": 1876
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 27621,
+        "prev_dg_reading": 1855
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 29154,
+        "prev_dg_reading": 2002
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 24643,
+        "prev_dg_reading": 1736
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 241097
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 241385
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 237325
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 262507
+      }
+    ]
+  },
+  "2025-04-01": {
+    "eb": [
+      {
+        "meter": "SL No 540430038840 (EB Unit)",
+        "prev_reading": 99316,
+        "prev_dg_reading": 3970
+      },
+      {
+        "meter": "SL No 540430038845 (EB Unit)",
+        "prev_reading": 1956,
+        "prev_dg_reading": 28.6
+      },
+      {
+        "meter": "SL No 540430038844 (EB Unit)",
+        "prev_reading": 145395,
+        "prev_dg_reading": 5938
+      },
+      {
+        "meter": "SL No 540430038821 (EB Unit)",
+        "prev_reading": 0,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "SL No 540430038849 (EB Unit)",
+        "prev_reading": 68389,
+        "prev_dg_reading": 3018
+      },
+      {
+        "meter": "SL No 540430038646 (EB Unit)",
+        "prev_reading": 82927,
+        "prev_dg_reading": 3935
+      },
+      {
+        "meter": "SL No 540430038843 (EB Unit)",
+        "prev_reading": 275737,
+        "prev_dg_reading": 10746
+      },
+      {
+        "meter": "SL No 540430038848 (EB Unit)",
+        "prev_reading": 55458,
+        "prev_dg_reading": 2048
+      }
+    ],
+    "ahu": [
+      {
+        "meter": "AHU1",
+        "prev_reading": 25188,
+        "prev_dg_reading": 1832
+      },
+      {
+        "meter": "AHU2",
+        "prev_reading": 25865,
+        "prev_dg_reading": 1797
+      },
+      {
+        "meter": "AHU3",
+        "prev_reading": 27082,
+        "prev_dg_reading": 1903
+      },
+      {
+        "meter": "AHU4",
+        "prev_reading": 23227,
+        "prev_dg_reading": 1686
+      }
+    ],
+    "btu": [
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 220563
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 224872
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 220395
+      },
+      {
+        "meter": "AHU4 - BTU",
+        "prev_reading": 244029
+      }
+    ]
+  },
+  "2025-03-01": {
+    "eb": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 91663
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3877,
+        "prev_dg_reading": 1956
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 28.6,
+        "prev_dg_reading": 134648
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 5807,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 0,
+        "prev_dg_reading": 62776
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 2950,
+        "prev_dg_reading": 76460
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3854,
+        "prev_dg_reading": 255821
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 10477,
+        "prev_dg_reading": 51469
+      }
+    ],
+    "ahu": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 24020
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1821,
+        "prev_dg_reading": 24157
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1772,
+        "prev_dg_reading": 24421
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1866,
+        "prev_dg_reading": 21969
+      }
+    ],
+    "btu": [
+      {
+        "meter": null,
+        "prev_reading": null
+      },
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 204528
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 211729
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 208888
+      }
+    ]
+  },
+  "2025-02-01": {
+    "eb": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 84669
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3872,
+        "prev_dg_reading": 1956
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 28.6,
+        "prev_dg_reading": 124715
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 5799,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 0,
+        "prev_dg_reading": 56491
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 2944,
+        "prev_dg_reading": 70440
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3848,
+        "prev_dg_reading": 237024
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 10460,
+        "prev_dg_reading": 48163
+      }
+    ],
+    "ahu": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 22927
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1819,
+        "prev_dg_reading": 22592
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1769,
+        "prev_dg_reading": 22468
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1864,
+        "prev_dg_reading": 20730
+      }
+    ],
+    "btu": [
+      {
+        "meter": null,
+        "prev_reading": null
+      },
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 190977
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 200908
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 200887
+      }
+    ]
+  },
+  "2025-01-01": {
+    "eb": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 76944
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3801,
+        "prev_dg_reading": 1956
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 28.6,
+        "prev_dg_reading": 113760
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 5702,
+        "prev_dg_reading": 0
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 0,
+        "prev_dg_reading": 50207
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 2892,
+        "prev_dg_reading": 64448
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 3800,
+        "prev_dg_reading": 217622
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 10322,
+        "prev_dg_reading": 45289
+      }
+    ],
+    "ahu": [
+      {
+        "meter": null,
+        "prev_reading": null,
+        "prev_dg_reading": 21831
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1811,
+        "prev_dg_reading": 21457
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1765,
+        "prev_dg_reading": 21190
+      },
+      {
+        "meter": "DG",
+        "prev_reading": 1859,
+        "prev_dg_reading": 19720
+      }
+    ],
+    "btu": [
+      {
+        "meter": null,
+        "prev_reading": null
+      },
+      {
+        "meter": "AHU1 - BTU",
+        "prev_reading": 180287
+      },
+      {
+        "meter": "AHU2 - BTU",
+        "prev_reading": 192836
+      },
+      {
+        "meter": "AHU3 - BTU",
+        "prev_reading": 194316
+      }
+    ]
+  }
+}
