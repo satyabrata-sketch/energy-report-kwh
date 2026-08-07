@@ -1,0 +1,16 @@
+{
+  "name": "kwh-ahu-energy-tracker",
+  "version": "1.0.0",
+  "description": "Daily AHU Saving & KWH Energy Tracker App",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo 'Static site build complete'"
+  },
+  "keywords": [
+    "energy-tracker",
+    "ahu-savings",
+    "kwh-consumption"
+  ],
+  "author": "satyabrata-sketch",
+  "license": "MIT"
+}
