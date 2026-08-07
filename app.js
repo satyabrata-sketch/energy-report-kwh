@@ -1762,7 +1762,7 @@
       });
     }
 
-    # 2. Monthly Energy Cost Trend Chart
+    // 2. Monthly Energy Cost Trend Chart
     const costCtx = document.getElementById('chart-cost-trend');
     if (costCtx) {
       new Chart(costCtx, {
@@ -1808,7 +1808,7 @@
       });
     }
 
-    # 3. EPI Trend vs 2025 Benchmark Chart
+    // 3. EPI Trend vs 2025 Benchmark Chart
     const epiCtx = document.getElementById('chart-epi-trend');
     if (epiCtx) {
       new Chart(epiCtx, {
@@ -1865,7 +1865,7 @@
       });
     }
 
-    # 4. YTD YoY Energy Component Net Cost Savings Chart
+    // 4. YTD YoY Energy Component Net Cost Savings Chart
     const yoyCtx = document.getElementById('chart-yoy-breakdown');
     if (yoyCtx) {
       new Chart(yoyCtx, {
