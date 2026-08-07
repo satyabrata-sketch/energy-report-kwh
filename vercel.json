@@ -1,16 +1,10 @@
 {
   "version": 2,
   "public": true,
-  "cleanUrls": true,
-  "headers": [
+  "rewrites": [
     {
       "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        }
-      ]
+      "destination": "/$1"
     }
   ]
 }
