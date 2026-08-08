@@ -710,12 +710,12 @@
 
           <div class="reading-inputs-grid">
             <div class="input-block">
-              <label>ON Time (hh:mm)</label>
+              <label style="color:#ffffff; font-weight:700;"><i data-lucide="clock" style="width:14px; height:14px; color:#10b981; display:inline-block; vertical-align:middle; margin-right:4px;"></i> ON Time (hh:mm)</label>
               <input type="time" class="input-field ahu-time-input" 
                      data-ahu="${ahu.ahu_id}" data-field="on_time" value="${ahu.on_time || '07:12'}">
             </div>
             <div class="input-block">
-              <label style="color:#ef4444;">OFF Time (hh:mm)</label>
+              <label style="color:#ffffff; font-weight:700;"><i data-lucide="clock" style="width:14px; height:14px; color:#ef4444; display:inline-block; vertical-align:middle; margin-right:4px;"></i> OFF Time (hh:mm)</label>
               <input type="time" class="input-field ahu-time-input" 
                      data-ahu="${ahu.ahu_id}" data-field="off_time" value="${ahu.off_time || '20:00'}">
             </div>

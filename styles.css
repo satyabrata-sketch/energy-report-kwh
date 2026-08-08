@@ -358,15 +358,48 @@ body {
 /* Universal Date & Time Picker White Icons and High Contrast Styling */
 input[type="date"],
 input[type="time"],
-input[type="datetime-local"] {
-  color-scheme: dark;
+input[type="datetime-local"],
+.ahu-time-input {
+  color-scheme: dark !important;
   color: #ffffff !important;
+}
+
+.ahu-time-input,
+input[type="time"] {
+  background: rgba(15, 23, 42, 0.85) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
+  font-weight: 800 !important;
+  font-size: calc(0.95rem * var(--font-scale)) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 0.6rem 0.8rem !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.25s ease;
+}
+
+.ahu-time-input:hover,
+.ahu-time-input:focus,
+input[type="time"]:hover,
+input[type="time"]:focus {
+  border-color: #ffffff !important;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.35) !important;
+  background: rgba(30, 41, 59, 0.95) !important;
+}
+
+/* Force WebKit/Blink time picker text elements to render pure white */
+input[type="time"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit-fields-wrapper,
+input[type="time"]::-webkit-datetime-edit-text,
+input[type="time"]::-webkit-datetime-edit-hour-field,
+input[type="time"]::-webkit-datetime-edit-minute-field,
+input[type="time"]::-webkit-datetime-edit-ampm-field {
+  color: #ffffff !important;
+  font-weight: 800 !important;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-  filter: invert(1) brightness(120%);
+  filter: invert(1) brightness(150%) !important;
   cursor: pointer;
   opacity: 0.95;
   padding: 3px;
@@ -377,7 +410,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 input[type="date"]::-webkit-calendar-picker-indicator:hover,
 input[type="time"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
-  filter: invert(1) brightness(150%);
+  filter: invert(1) brightness(200%) !important;
   background: rgba(255, 255, 255, 0.25);
 }
 
