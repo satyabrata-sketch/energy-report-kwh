@@ -407,11 +407,11 @@
     return `
       <div class="controls-card">
         <div class="date-selector-group">
-          <div class="date-input-wrap" style="background: linear-gradient(135deg, rgba(0,229,255,0.1), rgba(59,130,246,0.1)); border: 1px solid #00e5ff;">
-            <i data-lucide="calendar" style="color:#00e5ff; font-size:1.2rem;"></i>
-            <label style="font-size:0.85rem; color:#fff; font-weight:700;">Select Date from Calendar:</label>
-            <input type="date" id="selected-date-picker" value="${state.selectedDate}" style="font-size:1rem; font-weight:800; color:#00e5ff; cursor:pointer;">
-            <span style="font-size:0.75rem; color:var(--text-muted); margin-left:0.4rem;">(${dateFormattedStr})</span>
+          <div class="date-input-wrap">
+            <i data-lucide="calendar" style="color:#ffffff; font-size:1.2rem;"></i>
+            <label>Select Date from Calendar:</label>
+            <input type="date" id="selected-date-picker" value="${state.selectedDate}">
+            <span class="date-formatted-text">(${dateFormattedStr})</span>
           </div>
         </div>
 
