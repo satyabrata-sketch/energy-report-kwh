@@ -482,17 +482,53 @@
             const cloudData = json.data;
             const cloudVersion = json.version || 0;
 
-            // Merge cloud data if it has dates or is newer
-            const cloudDates = Object.keys(cloudData.kwh_daily || {}).length;
-            const localDates = Object.keys(state.data.kwh_daily || {}).length;
+            let hasChanges = false;
+            if (!state.data.kwh_daily) state.data.kwh_daily = {};
+            if (!state.data.ahu_saving) state.data.ahu_saving = {};
 
-            if (cloudDates >= localDates || cloudVersion > state.cloudSync.lastCloudVersion) {
-              state.data = cloudData;
-              state.cloudSync.lastCloudVersion = cloudVersion;
+            // Merge cloud dates into local
+            Object.keys(cloudData.kwh_daily || {}).forEach(d => {
+              if (!state.data.kwh_daily[d] || cloudVersion > state.cloudSync.lastCloudVersion) {
+                state.data.kwh_daily[d] = cloudData.kwh_daily[d];
+                hasChanges = true;
+              }
+            });
+
+            Object.keys(cloudData.ahu_saving || {}).forEach(d => {
+              if (!state.data.ahu_saving[d] || cloudVersion > state.cloudSync.lastCloudVersion) {
+                state.data.ahu_saving[d] = cloudData.ahu_saving[d];
+                hasChanges = true;
+              }
+            });
+
+            if (cloudData.transactions && cloudData.transactions.length) {
+              const existingIds = new Set((state.data.transactions || []).map(t => t.id));
+              cloudData.transactions.forEach(t => {
+                if (!existingIds.has(t.id)) {
+                  if (!state.data.transactions) state.data.transactions = [];
+                  state.data.transactions.push(t);
+                  hasChanges = true;
+                }
+              });
+            }
+
+            if (hasChanges || cloudVersion > state.cloudSync.lastCloudVersion) {
+              state.cloudSync.lastCloudVersion = Math.max(cloudVersion, state.cloudSync.lastCloudVersion);
               recalculateDynamicSummaryMatrix();
               localStorage.setItem('kwh_ahu_tracker_data_v2', JSON.stringify(state.data));
               if (manual) showToast(`☁️ Cloud data synchronized (Room: ${state.cloudSync.room})`);
               render();
+            } else {
+              const localDatesCount = Object.keys(state.data.kwh_daily || {}).length;
+              const cloudDatesCount = Object.keys(cloudData.kwh_daily || {}).length;
+              if (localDatesCount > cloudDatesCount) {
+                window.CloudSync.push(false);
+              }
+            }
+          } else {
+            const localDatesCount = Object.keys(state.data.kwh_daily || {}).length;
+            if (localDatesCount > 0) {
+              window.CloudSync.push(false);
             }
           }
           state.cloudSync.status = 'synced';
@@ -2948,7 +2984,7 @@
       adminForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const passVal = document.getElementById('admin-pass-input').value;
-        if (passVal === 'admin123' || passVal === 'cbre2026') {
+        if (passVal === 'Satya@1996') {
           state.isAdminUnlocked = true;
           state.showAdminModal = false;
           state.activeTab = 'admin';
