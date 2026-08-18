@@ -76,7 +76,7 @@ def scan_dt3_sheet_rows(ws):
         elif '540430038844' in c_val: meter_rows['eb_3'] = r
         elif '540430038821' in c_val: meter_rows['eb_4'] = r
         elif '540430038849' in c_val: meter_rows['eb_5'] = r
-        elif '540430038696' in c_val: meter_rows['eb_6'] = r
+        elif '540430038646' in c_val or '540430038696' in c_val: meter_rows['eb_6'] = r
         elif '540430038843' in c_val: meter_rows['eb_7'] = r
         elif '540430038848' in c_val: meter_rows['eb_8'] = r
         elif c_val == 'AHU1': meter_rows['ahu_1'] = r
@@ -98,7 +98,7 @@ def scan_dt3_sheet_rows(ws):
         elif '540430038844' in lbl: cons_rows['eb_3'] = r
         elif '540430038821' in lbl: cons_rows['eb_4'] = r
         elif '540430038849' in lbl: cons_rows['eb_5'] = r
-        elif '540430038696' in lbl: cons_rows['eb_6'] = r
+        elif '540430038646' in lbl or '540430038696' in lbl: cons_rows['eb_6'] = r
         elif '540430038843' in lbl: cons_rows['eb_7'] = r
         elif '540430038848' in lbl: cons_rows['eb_8'] = r
         elif lbl == 'AHU1': cons_rows['ahu_1'] = r
@@ -110,13 +110,53 @@ def scan_dt3_sheet_rows(ws):
         elif 'AHU3 - BTU' in lbl: cons_rows['btu_3'] = r
         elif 'AHU4 - BTU' in lbl: cons_rows['btu_4'] = r
         elif 'Total Power - EB Unit' in lbl: cons_rows['tot_eb'] = r
-        elif 'Total Power- DG' in lbl: cons_rows['tot_dg'] = r
+        elif 'Total Power- DG' in lbl or 'Total Power - DG' in lbl: cons_rows['tot_dg'] = r
         elif 'Total Power Cumulative' in lbl: cons_rows['tot_cum'] = r
         elif 'Total AHU Power Consumption' in lbl: cons_rows['tot_ahu'] = r
-        elif 'Total AHU DG consumption' in lbl: cons_rows['tot_ahu_dg'] = r
+        elif 'Total AHU DG consumption' in lbl or 'Total AHU DG Consumption' in lbl: cons_rows['tot_ahu_dg'] = r
         elif 'Total BTU Consumption' in lbl: cons_rows['tot_btu'] = r
 
     return meter_rows, cons_rows
+
+def ensure_month_sheet_in_dt3(wb, year, month):
+    """ Ensures that a specific month sheet (e.g. Aug-2026) exists in DT3 workbook """
+    month_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    m_str = month_names[month]
+    target_names = [f"{m_str}-{year}", f"{m_str} {year}", f"{m_str}-{str(year)[2:]}", f"{m_str}{year}"]
+    
+    for sname in wb.sheetnames:
+        for t in target_names:
+            if sname.lower() == t.lower():
+                return sname
+                
+    # Needs to create sheet by cloning July-2026 or latest sheet
+    base_sheet_name = 'July-2026' if 'July-2026' in wb.sheetnames else wb.sheetnames[-1]
+    source = wb[base_sheet_name]
+    new_sheet_name = f"{m_str}-{year}"
+    target = wb.copy_worksheet(source)
+    target.title = new_sheet_name
+    
+    # Calculate days in month
+    import calendar
+    _, days_in_month = calendar.monthrange(year, month)
+    
+    for day in range(1, days_in_month + 1):
+        col = 4 + day # Col E is 5 (day 1)
+        d = datetime.date(year, month, day)
+        day_name = d.strftime('%a')
+        
+        target.cell(4, col, datetime.datetime(year, month, day, 0, 0))
+        target.cell(5, col, day_name)
+        target.cell(40, col, datetime.datetime(year, month, day, 0, 0))
+        target.cell(41, col, day_name)
+        if target.max_row >= 84:
+            target.cell(84, col, datetime.datetime(year, month, day, 0, 0))
+            target.cell(85, col, day_name)
+            
+    if target.max_row >= 83:
+        target.cell(83, 5, f"{m_str.upper()} - {year}    EV METER READING")
+        
+    return new_sheet_name
 
 class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
@@ -161,6 +201,15 @@ class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
 
             kwh_daily = tracker_data.get('kwh_daily', {})
 
+            # Ensure sheets exist for all months present in kwh_daily
+            for d_str in kwh_daily.keys():
+                try:
+                    p = d_str.split('-')
+                    y, m = int(p[0]), int(p[1])
+                    ensure_month_sheet_in_dt3(wb, y, m)
+                except:
+                    pass
+
             # Map all date columns across month sheets & set freeze panes
             date_to_sheet_col = {}
             sheet_row_maps = {}
@@ -172,7 +221,6 @@ class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
                 if hasattr(sheet, 'sheet_view') and sheet.sheet_view:
                     sheet.sheet_view.showGridLines = True
 
-                # Freeze panes at column E (Row 6) so Date, Day, Time and Headers stay frozen
                 sheet.freeze_panes = 'E6'
 
                 m_rows, c_rows = scan_dt3_sheet_rows(sheet)
@@ -186,7 +234,13 @@ class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
                             date_to_sheet_col[d_str] = (sheetname, c)
 
             # Update readings and consumptions for each date
+            month_totals = {} # { "2026-08": { eb: 0, ahu: 0, dg: 0, btu: 0 } }
+
             for d_str, day_entry in kwh_daily.items():
+                m_key_ym = d_str[:7] # e.g. "2026-08"
+                if m_key_ym not in month_totals:
+                    month_totals[m_key_ym] = {'eb': 0.0, 'ahu': 0.0, 'dg': 0.0, 'btu': 0.0}
+
                 if d_str in date_to_sheet_col:
                     sname, c_idx = date_to_sheet_col[d_str]
                     sheet = wb[sname]
@@ -194,8 +248,8 @@ class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
 
                     # 1. EB Meters
                     eb_list = day_entry.get('eb', [])
-                    day_eb_sum = 0
-                    day_dg_sum = 0
+                    day_eb_sum = 0.0
+                    day_dg_sum = 0.0
 
                     for eb_item in eb_list:
                         m_id = eb_item.get('id')
@@ -231,10 +285,13 @@ class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
                     if 'tot_dg' in c_rows: sheet.cell(c_rows['tot_dg'], c_idx, day_dg_sum)
                     if 'tot_cum' in c_rows: sheet.cell(c_rows['tot_cum'], c_idx, day_eb_sum + day_dg_sum)
 
+                    month_totals[m_key_ym]['eb'] += day_eb_sum
+                    month_totals[m_key_ym]['dg'] += day_dg_sum
+
                     # 2. AHU Meters
                     ahu_list = day_entry.get('ahu', [])
-                    day_ahu_sum = 0
-                    day_ahu_dg_sum = 0
+                    day_ahu_sum = 0.0
+                    day_ahu_dg_sum = 0.0
 
                     for ahu_item in ahu_list:
                         m_id = ahu_item.get('id')
@@ -269,9 +326,11 @@ class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
                     if 'tot_ahu' in c_rows: sheet.cell(c_rows['tot_ahu'], c_idx, day_ahu_sum)
                     if 'tot_ahu_dg' in c_rows: sheet.cell(c_rows['tot_ahu_dg'], c_idx, day_ahu_dg_sum)
 
+                    month_totals[m_key_ym]['ahu'] += day_ahu_sum
+
                     # 3. BTU Meters
                     btu_list = day_entry.get('btu', [])
-                    day_btu_sum = 0
+                    day_btu_sum = 0.0
 
                     for btu_item in btu_list:
                         m_id = btu_item.get('id')
@@ -293,6 +352,44 @@ class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
                             day_btu_sum += btu_cons
 
                     if 'tot_btu' in c_rows: sheet.cell(c_rows['tot_btu'], c_idx, day_btu_sum)
+
+                    month_totals[m_key_ym]['btu'] += day_btu_sum
+
+            # Update 'summary' sheet with latest month totals (e.g. August 2026)
+            if 'summary' in wb.sheetnames:
+                ws_sum = wb['summary']
+                # Check for Aug 2026 column in summary (Col 28)
+                aug_k = '2026-08'
+                if aug_k in month_totals and ws_sum.max_column >= 27:
+                    tot_data = month_totals[aug_k]
+                    aug_col = 28
+                    ws_sum.cell(1, aug_col, datetime.datetime(2026, 8, 1, 0, 0))
+                    ws_sum.cell(8, aug_col, datetime.datetime(2026, 8, 1, 0, 0))
+                    
+                    eb_val = tot_data['eb']
+                    ahu_val = tot_data['ahu']
+                    dg_val = tot_data['dg']
+                    btu_val = tot_data['btu']
+                    tot_kwh = eb_val + ahu_val + dg_val + btu_val
+
+                    ws_sum.cell(2, aug_col, eb_val)
+                    ws_sum.cell(3, aug_col, ahu_val)
+                    ws_sum.cell(4, aug_col, dg_val)
+                    ws_sum.cell(5, aug_col, btu_val)
+                    ws_sum.cell(6, aug_col, tot_kwh)
+
+                    # Cost breakdown (EB rate: 7.45, AHU rate: 7.45, DG rate: 33.85, BTU rate: 4.30)
+                    eb_cost = eb_val * 7.45
+                    ahu_cost = ahu_val * 7.45
+                    dg_cost = dg_val * 33.85
+                    btu_cost = btu_val * 4.30
+                    tot_cost = eb_cost + ahu_cost + dg_cost + btu_cost
+
+                    ws_sum.cell(9, aug_col, eb_cost)
+                    ws_sum.cell(10, aug_col, ahu_cost)
+                    ws_sum.cell(11, aug_col, dg_cost)
+                    ws_sum.cell(12, aug_col, btu_cost)
+                    ws_sum.cell(13, aug_col, tot_cost)
 
             output = io.BytesIO()
             wb.save(output)
@@ -329,6 +426,7 @@ class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
 
             ahu_saving = tracker_data.get('ahu_saving', {})
 
+            # Update monthly sheets
             for sheetname in wb.sheetnames:
                 sheet = wb[sheetname]
                 if hasattr(sheet, 'sheet_view') and sheet.sheet_view:
@@ -362,6 +460,53 @@ class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
                                 if a_item.get('kwh_cons') is not None:
                                     sheet.cell(r_idx, offset + 5, float(a_item['kwh_cons']))
 
+            # Update Executive Dashboard if present
+            if 'Executive Dashboard' in wb.sheetnames:
+                ws_dash = wb['Executive Dashboard']
+                # Calculate August 2026 summary from ahu_saving
+                aug_entries = [v for k, v in ahu_saving.items() if k.startswith('2026-08')]
+                if aug_entries:
+                    aug_sched = 0
+                    aug_run = 0.0
+                    aug_saved_ahus = [0.0, 0.0, 0.0, 0.0]
+                    aug_kwh = 0.0
+                    aug_cost_saved = 0.0
+
+                    for entry in aug_entries:
+                        ahus = entry.get('ahus', [])
+                        for i, a in enumerate(ahus):
+                            on_t = str(a.get('on_time', ''))
+                            off_t = str(a.get('off_time', ''))
+                            kwh_c = float(a.get('kwh_cons') or 0)
+                            aug_kwh += kwh_c
+
+                            if on_t and off_t and on_t != 'OFF' and off_t != 'OFF':
+                                try:
+                                    on_h, on_m = map(int, on_t.split(':'))
+                                    off_h, off_m = map(int, off_t.split(':'))
+                                    run_h = max(0, (off_h + off_m/60) - (on_h + on_m/60))
+                                    saved_h = max(0, 20 - (off_h + off_m/60))
+                                    aug_run += run_h
+                                    if i < 4:
+                                        aug_saved_ahus[i] += saved_h
+                                    rate_hr = (kwh_c * 7.45) / run_h if run_h > 0 else 0
+                                    aug_cost_saved += saved_h * rate_hr
+                                except:
+                                    pass
+
+                    # Row 14 is August 2026
+                    ws_dash.cell(14, 4, aug_run)
+                    ws_dash.cell(14, 5, aug_saved_ahus[0])
+                    ws_dash.cell(14, 6, aug_saved_ahus[1])
+                    ws_dash.cell(14, 7, aug_saved_ahus[2])
+                    ws_dash.cell(14, 8, aug_saved_ahus[3])
+                    ws_dash.cell(14, 9, sum(aug_saved_ahus))
+                    ws_dash.cell(14, 10, aug_kwh)
+                    ws_dash.cell(14, 11, aug_kwh * 7.45)
+                    ws_dash.cell(14, 12, aug_kwh * 7.45)
+                    ws_dash.cell(14, 13, (aug_kwh * 7.45) + aug_cost_saved)
+                    ws_dash.cell(14, 14, aug_cost_saved)
+
             output = io.BytesIO()
             wb.save(output)
             output.seek(0)
@@ -383,5 +528,5 @@ if __name__ == '__main__':
     ensure_master_templates()
     handler = EnergyTrackerHandler
     with socketserver.TCPServer(("", PORT), handler) as httpd:
-        print(f"Energy Tracker Server running on port {PORT} with freeze panes engine...")
+        print(f"Energy Tracker Server running on port {PORT} with real-time export engine...")
         httpd.serve_forever()

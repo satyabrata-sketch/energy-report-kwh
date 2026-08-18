@@ -113108,6 +113108,90 @@ window.SEED_DATA = {
           "prev_reading": 194316
         }
       ]
+    },
+    "2026-08-01": {
+      "eb": [
+        {
+          "id": 1,
+          "prev_reading": 217557,
+          "prev_dg_reading": 4486
+        },
+        {
+          "id": 2,
+          "prev_reading": 1956,
+          "prev_dg_reading": 28.6
+        },
+        {
+          "id": 3,
+          "prev_reading": 314041,
+          "prev_dg_reading": 6713
+        },
+        {
+          "id": 4,
+          "prev_reading": 0,
+          "prev_dg_reading": 0
+        },
+        {
+          "id": 5,
+          "prev_reading": 166606,
+          "prev_dg_reading": 3459
+        },
+        {
+          "id": 6,
+          "prev_reading": 186794,
+          "prev_dg_reading": 4490
+        },
+        {
+          "id": 7,
+          "prev_reading": 602012,
+          "prev_dg_reading": 12192
+        },
+        {
+          "id": 8,
+          "prev_reading": 117032,
+          "prev_dg_reading": 2332
+        }
+      ],
+      "ahu": [
+        {
+          "id": 1,
+          "prev_reading": 64570,
+          "prev_dg_reading": 2004
+        },
+        {
+          "id": 2,
+          "prev_reading": 65986,
+          "prev_dg_reading": 2013
+        },
+        {
+          "id": 3,
+          "prev_reading": 80394,
+          "prev_dg_reading": 2166
+        },
+        {
+          "id": 4,
+          "prev_reading": 55029,
+          "prev_dg_reading": 1884
+        }
+      ],
+      "btu": [
+        {
+          "id": 1,
+          "prev_reading": 459002
+        },
+        {
+          "id": 2,
+          "prev_reading": 432663
+        },
+        {
+          "id": 3,
+          "prev_reading": 472756
+        },
+        {
+          "id": 4,
+          "prev_reading": 531216
+        }
+      ]
     }
   },
   "summary_matrix": {

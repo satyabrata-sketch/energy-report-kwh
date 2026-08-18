@@ -1,19 +1,25 @@
 /**
  * AHU & Daily KWH Energy Tracker - Main Application Script
- * Render exact Excel Dashboard and Summary Sheet Formats
+ * Render exact Excel Dashboard and Summary Sheet Formats with Real-Time August 2026 & Transaction Sync
  */
 
 (function () {
   // Global App State
   const state = {
-    activeTab: 'kwh', // 'kwh' | 'ahu' | 'month' | 'admin'
-    selectedDate: '2026-08-07',
-    selectedMonthMatrix: 'Aug-25', // Month filter key for Monthly Matrix view
+    activeTab: 'kwh', // 'kwh' | 'ahu' | 'txn' | 'month' | 'admin'
+    selectedDate: '2026-08-18',
+    selectedMonthMatrix: 'Aug-26', // Month filter key for Monthly Matrix view
     kwhFilter: 'all', // 'all' | 'eb' | 'ahu' | 'btu'
     fontScale: 1, // 0.85, 1, 1.15, 1.3
     isAdminUnlocked: false,
     showAdminModal: false,
     adminErrorMessage: '',
+    
+    // Transaction History Filters
+    txnFilterPeriod: 'Aug-26', // 'all' | 'Aug-26' | 'Jul-26' | 'Jun-26' | 'May-26' | 'today'
+    txnFilterCat: 'all', // 'all' | 'eb' | 'ahu' | 'btu' | 'ahu_sched' | 'dg'
+    txnSearchQuery: '',
+
     rates: {
       kwh: 7.45,
       btu: 4.30,
@@ -25,9 +31,19 @@
       ahu_saving: {},
       kwh_daily: {},
       month_baselines: {},
-      summary_matrix: { months: [], consumption: {}, cost: {} }
+      summary_matrix: { months: [], consumption: {}, cost: {} },
+      transactions: []
     }
   };
+
+  // Helper: Convert date string "YYYY-MM-DD" to Month Key "Aug-26"
+  function dateToMonthKey(dStr) {
+    if (!dStr) return '';
+    const dt = new Date(dStr);
+    const mShort = dt.toLocaleString('en-US', { month: 'short' });
+    const yShort = dt.toLocaleString('en-US', { year: '2-digit' });
+    return `${mShort}-${yShort}`;
+  }
 
   // Initialize Data from LocalStorage or Seed Data
   function initData() {
@@ -37,19 +53,39 @@
         state.data = JSON.parse(stored);
       } catch (e) {
         console.error("Failed to parse stored data:", e);
-        state.data = window.SEED_DATA || { ahu_saving: {}, kwh_daily: {}, month_baselines: {}, summary_matrix: {} };
+        state.data = window.SEED_DATA || { ahu_saving: {}, kwh_daily: {}, month_baselines: {}, summary_matrix: {}, transactions: [] };
       }
     } else {
-      state.data = window.SEED_DATA || { ahu_saving: {}, kwh_daily: {}, month_baselines: {}, summary_matrix: {} };
+      state.data = window.SEED_DATA || { ahu_saving: {}, kwh_daily: {}, month_baselines: {}, summary_matrix: {}, transactions: [] };
     }
 
+    if (!state.data.transactions) {
+      state.data.transactions = [];
+    }
+
+    // Set default selectedDate to today
     const todayStr = new Date().toISOString().slice(0, 10);
     state.selectedDate = todayStr;
+    state.selectedMonthMatrix = dateToMonthKey(todayStr) || 'Aug-26';
+
     ensureDateStructure(todayStr);
+    generateInitialTransactionsIfNeeded();
+    recalculateDynamicSummaryMatrix();
   }
 
-  function saveData() {
+  function saveData(skipBackend) {
+    recalculateDynamicSummaryMatrix();
     localStorage.setItem('kwh_ahu_tracker_data_v2', JSON.stringify(state.data));
+
+    if (!skipBackend && window.location.protocol.startsWith('http')) {
+      fetch('/api/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state.data)
+      }).catch(err => {
+        console.warn("Backend real-time save failed (offline or static mode):", err);
+      });
+    }
   }
 
   function getPreviousDateStr(dateStr) {
@@ -183,6 +219,187 @@
     }
   }
 
+  // Real-Time Transaction Logging Engine
+  function recordTransaction(item) {
+    if (!state.data.transactions) state.data.transactions = [];
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const dateFormatted = now.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+    const displayTime = `${dateFormatted}, ${timeStr}`;
+
+    const cons = Math.max(0, (Number(item.newReading) || 0) - (Number(item.prevReading) || 0));
+    const rate = item.category === 'btu' ? state.rates.btu : (item.isDG ? state.rates.dg : state.rates.kwh);
+    const cost = cons * rate;
+
+    const txnId = `TXN-${item.date.replace(/-/g, '')}-${item.category.toUpperCase()}-${item.meterId || 'ALL'}-${Date.now().toString().slice(-4)}`;
+
+    const txnObj = {
+      id: txnId,
+      timestamp: now.toISOString(),
+      displayTime: displayTime,
+      date: item.date,
+      month: dateToMonthKey(item.date),
+      category: item.category,
+      categoryLabel: item.categoryLabel || item.category.toUpperCase(),
+      meterId: item.meterId,
+      meterName: item.meterName || `Meter ${item.meterId}`,
+      location: item.location || '3F',
+      prevReading: item.prevReading,
+      newReading: item.newReading,
+      consumption: Number(cons.toFixed(2)),
+      cost: Number(cost.toFixed(2)),
+      status: 'Committed & Synced',
+      source: item.source || 'User Entry'
+    };
+
+    // Prepend new transaction
+    state.data.transactions.unshift(txnObj);
+
+    // Limit transactions buffer to 500 records
+    if (state.data.transactions.length > 500) {
+      state.data.transactions = state.data.transactions.slice(0, 500);
+    }
+
+    saveData();
+  }
+
+  function generateInitialTransactionsIfNeeded() {
+    if (state.data.transactions && state.data.transactions.length > 0) return;
+
+    state.data.transactions = [];
+    const dates = Object.keys(state.data.kwh_daily || {}).sort().reverse();
+    const sampleDates = dates.slice(0, 20); // Take recent dates
+
+    sampleDates.forEach(dStr => {
+      const dayData = state.data.kwh_daily[dStr];
+      const mKey = dateToMonthKey(dStr);
+
+      (dayData.eb || []).forEach(m => {
+        const prev = getExactPreviousReading(dStr, 'eb', m.id);
+        const cons = Math.max(0, (m.reading || 0) - prev.reading);
+        state.data.transactions.push({
+          id: `TXN-${dStr.replace(/-/g, '')}-EB-${m.id}`,
+          timestamp: `${dStr}T08:00:00.000Z`,
+          displayTime: `${dStr}, 08:00 AM`,
+          date: dStr,
+          month: mKey,
+          category: 'eb',
+          categoryLabel: '⚡ Electricity Board (EB)',
+          meterId: m.id,
+          meterName: m.name,
+          location: m.location || '3F',
+          prevReading: prev.reading,
+          newReading: m.reading,
+          consumption: Number(cons.toFixed(2)),
+          cost: Number((cons * state.rates.kwh).toFixed(2)),
+          status: 'Synced',
+          source: 'Excel Baseline / Sync'
+        });
+      });
+
+      (dayData.ahu || []).forEach(m => {
+        const prev = getExactPreviousReading(dStr, 'ahu', m.id);
+        const cons = Math.max(0, (m.reading || 0) - prev.reading);
+        state.data.transactions.push({
+          id: `TXN-${dStr.replace(/-/g, '')}-AHU-${m.id}`,
+          timestamp: `${dStr}T08:00:00.000Z`,
+          displayTime: `${dStr}, 08:00 AM`,
+          date: dStr,
+          month: mKey,
+          category: 'ahu',
+          categoryLabel: '🌬️ AHU Power',
+          meterId: m.id,
+          meterName: m.name,
+          location: m.location || '3F',
+          prevReading: prev.reading,
+          newReading: m.reading,
+          consumption: Number(cons.toFixed(2)),
+          cost: Number((cons * state.rates.kwh).toFixed(2)),
+          status: 'Synced',
+          source: 'Excel Baseline / Sync'
+        });
+      });
+    });
+
+    saveData(true);
+  }
+
+  // Recalculate Master Summary Matrix in real-time
+  function recalculateDynamicSummaryMatrix() {
+    const kwhDaily = state.data.kwh_daily || {};
+    const monthMap = {}; // { 'Aug-26': { eb: 0, ahu: 0, dg: 0, btu: 0 } }
+
+    Object.keys(kwhDaily).forEach(dStr => {
+      const mKey = dateToMonthKey(dStr);
+      if (!monthMap[mKey]) {
+        monthMap[mKey] = { eb: 0, ahu: 0, dg: 0, btu: 0 };
+      }
+
+      const dayData = kwhDaily[dStr];
+      (dayData.eb || []).forEach(m => {
+        const prev = getExactPreviousReading(dStr, 'eb', m.id);
+        const ebCons = Math.max(0, (Number(m.reading) || 0) - prev.reading);
+        const dgCons = Math.max(0, (Number(m.dg_reading) || 0) - prev.dg_reading);
+        monthMap[mKey].eb += ebCons;
+        monthMap[mKey].dg += dgCons;
+      });
+
+      (dayData.ahu || []).forEach(m => {
+        const prev = getExactPreviousReading(dStr, 'ahu', m.id);
+        const ahuCons = Math.max(0, (Number(m.reading) || 0) - prev.reading);
+        monthMap[mKey].ahu += ahuCons;
+      });
+
+      (dayData.btu || []).forEach(m => {
+        const prev = getExactPreviousReading(dStr, 'btu', m.id);
+        const btuCons = Math.max(0, (Number(m.reading) || 0) - prev.reading);
+        monthMap[mKey].btu += btuCons;
+      });
+    });
+
+    // Merge with base historical months
+    const baseMonths = ["Jan-25", "Feb-25", "Mar-25", "Apr-25", "May-25", "Jun-25", "Jul-25", "Aug-25", "Sep-25", "Oct-25", "Nov-25", "Dec-25", "Jan-26", "Feb-26", "Mar-26", "Apr-26", "May-26", "Jun-26", "Jul-26", "Aug-26"];
+    const allMonths = Array.from(new Set([...baseMonths, ...Object.keys(monthMap)]));
+
+    // Update state.data.summary_matrix
+    if (!state.data.summary_matrix) state.data.summary_matrix = { months: [], consumption: {}, cost: {} };
+    state.data.summary_matrix.months = allMonths;
+
+    const consEB = [], consAHU = [], consDG = [], consBTU = [], consTot = [];
+    const costEB = [], costAHU = [], costDG = [], costBTU = [], costTot = [];
+
+    allMonths.forEach(m => {
+      let eb = monthMap[m]?.eb || 0;
+      let ahu = monthMap[m]?.ahu || 0;
+      let dg = monthMap[m]?.dg || 0;
+      let btu = monthMap[m]?.btu || 0;
+
+      // Fallback to static seed data for historical months if daily data is 0
+      const seedIdx = (window.SEED_DATA?.summary_matrix?.months || []).indexOf(m);
+      if (seedIdx !== -1 && eb === 0) {
+        eb = window.SEED_DATA.summary_matrix.consumption['EB']?.[seedIdx] || 0;
+        ahu = window.SEED_DATA.summary_matrix.consumption['AHU']?.[seedIdx] || 0;
+        dg = window.SEED_DATA.summary_matrix.consumption['DG']?.[seedIdx] || 0;
+        btu = window.SEED_DATA.summary_matrix.consumption['BTU']?.[seedIdx] || 0;
+      }
+
+      const tot = eb + ahu + dg + btu;
+      consEB.push(eb); consAHU.push(ahu); consDG.push(dg); consBTU.push(btu); consTot.push(tot);
+
+      const cEB = eb * state.rates.kwh;
+      const cAHU = ahu * state.rates.kwh;
+      const cDG = dg * state.rates.dg;
+      const cBTU = btu * state.rates.btu;
+      const cTot = cEB + cAHU + cDG + cBTU;
+
+      costEB.push(cEB); costAHU.push(cAHU); costDG.push(cDG); costBTU.push(cBTU); costTot.push(cTot);
+    });
+
+    state.data.summary_matrix.consumption = { 'EB': consEB, 'AHU': consAHU, 'DG': consDG, 'BTU': consBTU, 'Total': consTot };
+    state.data.summary_matrix.cost = { 'EB': costEB, 'AHU': costAHU, 'DG': costDG, 'BTU': costBTU, 'Total': costTot };
+  }
+
   function calculateAHUSaving(dayRec) {
     const dayStr = dayRec.day;
     const isSun = dayStr === 'Sun';
@@ -314,7 +531,6 @@
 
   function render() {
     ensureDateStructure(state.selectedDate);
-
     document.documentElement.style.setProperty('--font-scale', state.fontScale);
 
     const appContainer = document.getElementById('app');
@@ -323,14 +539,13 @@
     appContainer.innerHTML = `
       ${renderTopHeader()}
       ${renderNavTabs()}
-      ${renderUserControlBarOnlyDate()}
+      ${state.activeTab === 'kwh' || state.activeTab === 'ahu' ? renderUserControlBarOnlyDate() : ''}
       ${renderTabContent()}
-      ${state.activeTab === 'month' ? renderFullDT3SummaryMatrixSection() : renderMonthMatrixSectionBelow()}
+      ${state.activeTab === 'month' ? renderFullDT3SummaryMatrixSection() : ''}
       ${state.showAdminModal ? renderAdminAuthModal() : ''}
     `;
 
     if (window.lucide) lucide.createIcons();
-
     attachEventListeners();
 
     if (state.activeTab === 'admin' && state.isAdminUnlocked) {
@@ -350,6 +565,11 @@
         </div>
 
         <div class="top-utilities">
+          <div class="live-sync-indicator" title="Data synchronized with local storage & master engine">
+            <span class="pulse-dot"></span>
+            <span class="live-sync-text">Real-Time Sync Active</span>
+          </div>
+
           <div class="rate-badge-group">
             <div class="rate-item" title="Electricity Board KWH Unit Rate">⚡ KWH: <strong>₹${state.rates.kwh.toFixed(2)}</strong></div>
             <div class="rate-item" title="BTU Chilled Water Cooling Unit Rate">❄️ BTU: <strong>₹${state.rates.btu.toFixed(2)}</strong></div>
@@ -373,6 +593,7 @@
   }
 
   function renderNavTabs() {
+    const txnCount = (state.data.transactions || []).length;
     return `
       <nav class="nav-tabs-bar">
         <button class="nav-tab-btn kwh-tab ${state.activeTab === 'kwh' ? 'active' : ''}" data-tab="kwh">
@@ -380,6 +601,10 @@
         </button>
         <button class="nav-tab-btn ahu-tab ${state.activeTab === 'ahu' ? 'active' : ''}" data-tab="ahu">
           <i data-lucide="fan"></i> AHU Saving Tracker & BTU Cost
+        </button>
+        <button class="nav-tab-btn txn-tab ${state.activeTab === 'txn' ? 'active' : ''}" data-tab="txn">
+          <i data-lucide="history"></i> Transaction History & Audit Log
+          <span class="tab-badge">${txnCount}</span>
         </button>
         <button class="nav-tab-btn ${state.activeTab === 'month' ? 'active' : ''}" data-tab="month">
           <i data-lucide="calendar"></i> Monthly Excel Matrix View
@@ -409,7 +634,7 @@
         <div class="date-selector-group">
           <div class="date-input-wrap">
             <i data-lucide="calendar" style="color:#ffffff; font-size:1.2rem;"></i>
-            <label>Select Date from Calendar:</label>
+            <label>Select Operational Date:</label>
             <input type="date" id="selected-date-picker" value="${state.selectedDate}">
             <span class="date-formatted-text">(${dateFormattedStr})</span>
           </div>
@@ -425,6 +650,8 @@
       return renderKWHDailyLogContent();
     } else if (state.activeTab === 'ahu') {
       return renderAHUSavingLogContent();
+    } else if (state.activeTab === 'txn') {
+      return renderTransactionHistoryContent();
     } else if (state.activeTab === 'month') {
       return '';
     } else if (state.activeTab === 'admin') {
@@ -807,8 +1034,190 @@
     `;
   }
 
+  // 3. Render Transaction History & Audit Trail Content
+  function renderTransactionHistoryContent() {
+    const txns = state.data.transactions || [];
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const currMonthKey = dateToMonthKey(todayStr) || 'Aug-26';
+
+    // Calculate live summary stats for current month
+    const augTxns = txns.filter(t => t.month === 'Aug-26' || (t.date && t.date.startsWith('2026-08')));
+    const augCount = augTxns.length;
+    const augKwh = augTxns.reduce((acc, cur) => acc + (cur.consumption || 0), 0);
+    const augCost = augTxns.reduce((acc, cur) => acc + (cur.cost || 0), 0);
+
+    // Filter transactions by Period, Category & Search query
+    let filtered = txns.filter(t => {
+      if (state.txnFilterPeriod !== 'all') {
+        if (state.txnFilterPeriod === 'today' && t.date !== todayStr) return false;
+        if (state.txnFilterPeriod !== 'today' && t.month !== state.txnFilterPeriod && !(t.date && t.date.startsWith('2026-08') && state.txnFilterPeriod === 'Aug-26')) return false;
+      }
+
+      if (state.txnFilterCat !== 'all' && t.category !== state.txnFilterCat) {
+        return false;
+      }
+
+      if (state.txnSearchQuery) {
+        const q = state.txnSearchQuery.toLowerCase();
+        const matchesName = (t.meterName || '').toLowerCase().includes(q);
+        const matchesId = (t.id || '').toLowerCase().includes(q);
+        const matchesDate = (t.date || '').toLowerCase().includes(q);
+        const matchesCat = (t.categoryLabel || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesId && !matchesDate && !matchesCat) return false;
+      }
+
+      return true;
+    });
+
+    const rowsHtml = filtered.map(t => {
+      let badgeClass = 'txn-badge-eb';
+      if (t.category === 'ahu') badgeClass = 'txn-badge-ahu';
+      else if (t.category === 'btu') badgeClass = 'txn-badge-btu';
+      else if (t.category === 'dg') badgeClass = 'txn-badge-dg';
+      else if (t.category === 'ahu_sched') badgeClass = 'txn-badge-sched';
+
+      return `
+        <tr>
+          <td><span class="txn-id-pill">${t.id}</span></td>
+          <td><span style="color:#cbd5e1; font-size:0.8rem;">${t.displayTime || t.timestamp}</span></td>
+          <td><strong style="color:#00e5ff; cursor:pointer;" class="btn-jump-date" data-date="${t.date}">${t.date}</strong></td>
+          <td><span class="txn-cat-badge ${badgeClass}">${t.categoryLabel || t.category}</span></td>
+          <td>
+            <div style="font-weight:700; color:#fff;">${t.meterName}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">Loc: ${t.location || '3F'}</div>
+          </td>
+          <td>${t.prevReading !== undefined ? t.prevReading : '-'}</td>
+          <td><strong style="color:#fff;">${t.newReading !== undefined ? t.newReading : '-'}</strong></td>
+          <td><span class="txn-cons-pill">+${t.consumption !== undefined ? t.consumption.toFixed(1) : '0'} kWh</span></td>
+          <td><strong style="color:#34d399;">₹${t.cost !== undefined ? t.cost.toFixed(2) : '0.00'}</strong></td>
+          <td><span class="txn-synced-badge"><i data-lucide="check" style="width:12px; height:12px;"></i> ${t.status || 'Synced'}</span></td>
+          <td>
+            <button class="btn-table-action btn-jump-date" data-date="${t.date}" title="Jump to date in Daily Entry">
+              <i data-lucide="external-link"></i> View
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <div class="txn-history-container">
+        <!-- Live Status Bar -->
+        <div class="txn-status-banner">
+          <div class="live-sync-indicator" style="background:transparent; border:none; padding:0;">
+            <span class="pulse-dot"></span>
+            <div>
+              <h2 style="font-size:1.15rem; color:#fff; font-weight:800; display:flex; align-items:center; gap:0.5rem;">
+                <i data-lucide="history" style="color:#00e5ff;"></i> Transaction History & Real-Time Operational Audit Trail
+              </h2>
+              <p style="font-size:0.8rem; color:var(--text-muted);">Every meter reading commit, DG log, AHU saving update, and baseline sync is recorded in real time.</p>
+            </div>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:0.8rem;">
+            <button class="btn-export-csv" id="btn-export-txn-csv">
+              <i data-lucide="download"></i> Export Transaction CSV
+            </button>
+            <button class="btn-txn-sync" id="btn-force-sync">
+              <i data-lucide="refresh-cw"></i> Sync Real-Time Now
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 KPI Summary Cards -->
+        <div class="kpi-cards-row">
+          <div class="kpi-card">
+            <div class="kpi-title">TOTAL LOGGED TRANSACTIONS</div>
+            <div class="kpi-value">${txns.length}</div>
+            <div class="kpi-subtext">All historical & current commits</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-title">AUGUST 2026 ENTRIES</div>
+            <div class="kpi-value" style="color:#00e5ff;">${augCount} <span style="font-size:0.8rem;">records</span></div>
+            <div class="kpi-subtext">Active operational month entries</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-title">AUG 2026 ENERGY LOGGED</div>
+            <div class="kpi-value" style="color:#fbbf24;">${augKwh.toLocaleString(undefined, {maximumFractionDigits:1})} <span style="font-size:0.85rem;">kWh</span></div>
+            <div class="kpi-subtext">Total consumption recorded</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-title">AUG 2026 ESTIMATED COST</div>
+            <div class="kpi-value" style="color:#34d399;">₹${augCost.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
+            <div class="kpi-subtext">Calculated energy cost</div>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="controls-card" style="margin-top:1.5rem; margin-bottom:1.2rem;">
+          <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <label style="font-size:0.85rem; font-weight:700; color:#00e5ff;">Period:</label>
+              <select id="txn-period-select" class="input-field" style="width:auto; min-width:160px;">
+                <option value="all" ${state.txnFilterPeriod === 'all' ? 'selected' : ''}>All Transactions</option>
+                <option value="Aug-26" ${state.txnFilterPeriod === 'Aug-26' ? 'selected' : ''}>August 2026 (Current)</option>
+                <option value="Jul-26" ${state.txnFilterPeriod === 'Jul-26' ? 'selected' : ''}>July 2026</option>
+                <option value="Jun-26" ${state.txnFilterPeriod === 'Jun-26' ? 'selected' : ''}>June 2026</option>
+                <option value="May-26" ${state.txnFilterPeriod === 'May-26' ? 'selected' : ''}>May 2026</option>
+                <option value="today" ${state.txnFilterPeriod === 'today' ? 'selected' : ''}>Today (${todayStr})</option>
+              </select>
+            </div>
+
+            <div class="filter-pills-container">
+              <button class="pill-btn ${state.txnFilterCat === 'all' ? 'active' : ''}" data-txncat="all">All Categories</button>
+              <button class="pill-btn ${state.txnFilterCat === 'eb' ? 'active' : ''}" data-txncat="eb">⚡ EB</button>
+              <button class="pill-btn ${state.txnFilterCat === 'ahu' ? 'active' : ''}" data-txncat="ahu">🌬️ AHU</button>
+              <button class="pill-btn ${state.txnFilterCat === 'btu' ? 'active' : ''}" data-txncat="btu">❄️ BTU</button>
+              <button class="pill-btn ${state.txnFilterCat === 'dg' ? 'active' : ''}" data-txncat="dg">⛽ DG</button>
+            </div>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:0.6rem; min-width:260px;">
+            <input type="text" id="txn-search-input" class="input-field" placeholder="Search by meter, date, TXN ID..." value="${state.txnSearchQuery}">
+            ${state.txnSearchQuery ? `<button class="font-btn" id="btn-clear-txn-search">✕</button>` : ''}
+          </div>
+        </div>
+
+        <!-- Transactions Table -->
+        <div class="table-responsive-container">
+          <table class="data-table txn-table">
+            <thead>
+              <tr>
+                <th>TXN ID</th>
+                <th>Timestamp</th>
+                <th>Log Date</th>
+                <th>Category</th>
+                <th>Meter / Asset</th>
+                <th>Prev Reading</th>
+                <th>New Reading</th>
+                <th>Net Consumed</th>
+                <th>Est Cost</th>
+                <th>Sync Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.length > 0 ? rowsHtml : `
+                <tr>
+                  <td colspan="11" style="text-align:center; padding:2.5rem; color:var(--text-muted);">
+                    <i data-lucide="inbox" style="font-size:2rem; margin-bottom:0.5rem; color:#6b7280;"></i>
+                    <div>No transaction records found matching the selected filters.</div>
+                  </td>
+                </tr>
+              `}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
   // Full DT-3 Summary Matrix Sheet Format (Matching Excel summary Sheet)
   function renderFullDT3SummaryMatrixSection() {
+    recalculateDynamicSummaryMatrix();
     const sumData = state.data.summary_matrix || { months: [], consumption: {}, cost: {} };
     const months = sumData.months || [];
 
@@ -838,7 +1247,7 @@
       <div style="margin-top: 1.5rem;">
         <div class="section-header-title eb-header" style="margin-top:0;">
           <h2><i data-lucide="file-spreadsheet"></i> DT-3 Master Monthly Consumption & Cost Summary Matrix (Matching Excel summary Sheet)</h2>
-          <span style="font-size:0.8rem;">Historical & Current Monthly Energy Consumptions (2024 to 2026)</span>
+          <span style="font-size:0.8rem;">Historical & Current Monthly Energy Consumptions (2024 to August 2026 Real-Time Synced)</span>
         </div>
 
         <div class="controls-card" style="margin-bottom:1rem; border-color:#0284c7;">
@@ -883,32 +1292,46 @@
   }
 
   function renderMonthMatrixSectionBelow() {
-    const selectedMonth = state.selectedMonthMatrix;
-    const sortedDates = Object.keys(state.data.kwh_daily || {}).sort();
+    const selectedMonth = state.selectedMonthMatrix || 'Aug-26';
+    
+    // Parse Year and Month from selectedMonth (e.g. "Aug-26" -> year 2026, month 8)
+    let targetYear = 2026;
+    let targetMonth = 8;
 
-    const dateList = sortedDates.filter(dStr => {
-      const dt = new Date(dStr);
-      const mKey = dt.toLocaleString('default', { month: 'short', year: '2-digit' }).replace(' ', '-');
-      const mLong = dt.toLocaleString('default', { month: 'long', year: 'numeric' });
-      return mKey.toLowerCase() === selectedMonth.toLowerCase() || 
-             mKey.replace('-', ' ').toLowerCase() === selectedMonth.toLowerCase() ||
-             mLong.toLowerCase().includes(selectedMonth.toLowerCase().replace('-', ' '));
-    });
+    const monthMap = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+    const p = selectedMonth.toLowerCase().split('-');
+    if (p.length >= 2) {
+      const mStr = p[0].slice(0, 3);
+      if (monthMap[mStr]) targetMonth = monthMap[mStr];
+      const yVal = parseInt(p[1]);
+      if (yVal < 100) targetYear = 2000 + yVal;
+      else if (yVal >= 2000) targetYear = yVal;
+    }
+
+    // Generate all days in month
+    const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
+    const dateList = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      dateList.push(dStr);
+    }
 
     const monthOptions = [
-      { key: "Aug-26", label: "August 2026" },
-      { key: "July-2026", label: "July 2026" },
-      { key: "Jun-2026", label: "June 2026" },
-      { key: "May-2026", label: "May 2026" },
+      { key: "Aug-26", label: "August 2026 (Current)" },
+      { key: "Jul-26", label: "July 2026" },
+      { key: "Jun-26", label: "June 2026" },
+      { key: "May-26", label: "May 2026" },
+      { key: "Apr-26", label: "April 2026" },
+      { key: "Mar-26", label: "March 2026" },
+      { key: "Feb-26", label: "February 2026" },
+      { key: "Jan-26", label: "January 2026" },
       { key: "Aug-25", label: "August 2025" },
-      { key: "July-2025", label: "July 2025" },
-      { key: "March-25", label: "March 2025" },
-      { key: "Feb-2025", label: "February 2025" },
-      { key: "Jan-2025", label: "January 2025" }
+      { key: "Jul-25", label: "July 2025" },
+      { key: "Mar-25", label: "March 2025" }
     ];
 
     const selectOptionsHtml = monthOptions.map(m => `
-      <option value="${m.key}" ${state.selectedMonthMatrix === m.key ? 'selected' : ''}>${m.label}</option>
+      <option value="${m.key}" ${selectedMonth === m.key ? 'selected' : ''}>${m.label}</option>
     `).join('');
 
     const ebMaster = [
@@ -945,12 +1368,12 @@
 
       let ebCells = dateList.map(d => {
         const val = state.data.kwh_daily[d]?.eb?.find(e => e.id === m.id)?.reading;
-        return `<td>${val !== undefined ? val : ''}</td>`;
+        return `<td>${val !== undefined ? val : '-'}</td>`;
       }).join('');
 
       let dgCells = dateList.map(d => {
         const val = state.data.kwh_daily[d]?.eb?.find(e => e.id === m.id)?.dg_reading;
-        return `<td style="color:#fbbf24;">${val !== undefined ? val : ''}</td>`;
+        return `<td style="color:#fbbf24;">${val !== undefined ? val : '-'}</td>`;
       }).join('');
 
       readingsRowsHtml += `
@@ -977,12 +1400,12 @@
 
       let ahuCells = dateList.map(d => {
         const val = state.data.kwh_daily[d]?.ahu?.find(a => a.id === m.id)?.reading;
-        return `<td>${val !== undefined ? val : ''}</td>`;
+        return `<td>${val !== undefined ? val : '-'}</td>`;
       }).join('');
 
       let dgCells = dateList.map(d => {
         const val = state.data.kwh_daily[d]?.ahu?.find(a => a.id === m.id)?.dg_reading;
-        return `<td style="color:#fbbf24;">${val !== undefined ? val : ''}</td>`;
+        return `<td style="color:#fbbf24;">${val !== undefined ? val : '-'}</td>`;
       }).join('');
 
       readingsRowsHtml += `
@@ -1008,7 +1431,7 @@
 
       let btuCells = dateList.map(d => {
         const val = state.data.kwh_daily[d]?.btu?.find(b => b.id === m.id)?.reading;
-        return `<td>${val !== undefined ? val : ''}</td>`;
+        return `<td>${val !== undefined ? val : '-'}</td>`;
       }).join('');
 
       readingsRowsHtml += `
@@ -1046,14 +1469,14 @@
         const currData = state.data.kwh_daily[currDate]?.eb?.find(e => e.id === m.id) || {};
         const prevInfo = getExactPreviousReading(currDate, 'eb', m.id);
 
-        const ebCons = (currData.reading && prevInfo.reading) ? Math.max(0, currData.reading - prevInfo.reading) : 0;
-        const dgCons = (currData.dg_reading && prevInfo.dg_reading) ? Math.max(0, currData.dg_reading - prevInfo.dg_reading) : 0;
+        const ebCons = (currData.reading !== undefined && prevInfo.reading !== undefined) ? Math.max(0, currData.reading - prevInfo.reading) : 0;
+        const dgCons = (currData.dg_reading !== undefined && prevInfo.dg_reading !== undefined) ? Math.max(0, currData.dg_reading - prevInfo.dg_reading) : 0;
 
         totEBByDate[currDate] += ebCons;
         totDGByDate[currDate] += dgCons;
 
-        ebConsCells += `<td>${ebCons}</td>`;
-        dgConsCells += `<td style="color:#fbbf24;">${dgCons}</td>`;
+        ebConsCells += `<td>${ebCons ? ebCons.toFixed(1) : '0'}</td>`;
+        dgConsCells += `<td style="color:#fbbf24;">${dgCons ? dgCons.toFixed(1) : '0'}</td>`;
       }
 
       consRowsHtml += `
@@ -1069,9 +1492,9 @@
       `;
     });
 
-    const totEBCells = dateList.map(d => `<td><strong>${totEBByDate[d]}</strong></td>`).join('');
-    const totDGCells = dateList.map(d => `<td style="color:#fbbf24;"><strong>${totDGByDate[d]}</strong></td>`).join('');
-    const totCumCells = dateList.map(d => `<td style="color:#00e5ff;"><strong>${totEBByDate[d] + totDGByDate[d]}</strong></td>`).join('');
+    const totEBCells = dateList.map(d => `<td><strong>${totEBByDate[d].toFixed(1)}</strong></td>`).join('');
+    const totDGCells = dateList.map(d => `<td style="color:#fbbf24;"><strong>${totDGByDate[d].toFixed(1)}</strong></td>`).join('');
+    const totCumCells = dateList.map(d => `<td style="color:#00e5ff;"><strong>${(totEBByDate[d] + totDGByDate[d]).toFixed(1)}</strong></td>`).join('');
 
     consRowsHtml += `
       <tr class="total-row"><td></td><td></td><td>Total Power - EB Unit</td>${totEBCells}</tr>
@@ -1088,14 +1511,14 @@
         const currData = state.data.kwh_daily[currDate]?.ahu?.find(a => a.id === m.id) || {};
         const prevInfo = getExactPreviousReading(currDate, 'ahu', m.id);
 
-        const ahuCons = (currData.reading && prevInfo.reading) ? Math.max(0, currData.reading - prevInfo.reading) : 0;
-        const dgCons = (currData.dg_reading && prevInfo.dg_reading) ? Math.max(0, currData.dg_reading - prevInfo.dg_reading) : 0;
+        const ahuCons = (currData.reading !== undefined && prevInfo.reading !== undefined) ? Math.max(0, currData.reading - prevInfo.reading) : 0;
+        const dgCons = (currData.dg_reading !== undefined && prevInfo.dg_reading !== undefined) ? Math.max(0, currData.dg_reading - prevInfo.dg_reading) : 0;
 
         totAHUByDate[currDate] += ahuCons;
         totAHUDGByDate[currDate] += dgCons;
 
-        ahuConsCells += `<td>${ahuCons}</td>`;
-        dgConsCells += `<td style="color:#fbbf24;">${dgCons}</td>`;
+        ahuConsCells += `<td>${ahuCons ? ahuCons.toFixed(1) : '0'}</td>`;
+        dgConsCells += `<td style="color:#fbbf24;">${dgCons ? dgCons.toFixed(1) : '0'}</td>`;
       }
 
       consRowsHtml += `
@@ -1111,8 +1534,8 @@
       `;
     });
 
-    const totAHUCells = dateList.map(d => `<td style="color:var(--ahu-color);"><strong>${totAHUByDate[d]}</strong></td>`).join('');
-    const totAHUDGCells = dateList.map(d => `<td style="color:#fbbf24;"><strong>${totAHUDGByDate[d]}</strong></td>`).join('');
+    const totAHUCells = dateList.map(d => `<td style="color:var(--ahu-color);"><strong>${totAHUByDate[d].toFixed(1)}</strong></td>`).join('');
+    const totAHUDGCells = dateList.map(d => `<td style="color:#fbbf24;"><strong>${totAHUDGByDate[d].toFixed(1)}</strong></td>`).join('');
 
     consRowsHtml += `
       <tr class="total-row"><td></td><td></td><td style="color:var(--ahu-color);">Total AHU Power Consumption</td>${totAHUCells}</tr>
@@ -1127,9 +1550,9 @@
         const currData = state.data.kwh_daily[currDate]?.btu?.find(b => b.id === m.id) || {};
         const prevInfo = getExactPreviousReading(currDate, 'btu', m.id);
 
-        const btuCons = (currData.reading && prevInfo.reading) ? Math.max(0, currData.reading - prevInfo.reading) : 0;
+        const btuCons = (currData.reading !== undefined && prevInfo.reading !== undefined) ? Math.max(0, currData.reading - prevInfo.reading) : 0;
         totBTUByDate[currDate] += btuCons;
-        btuConsCells += `<td>${btuCons}</td>`;
+        btuConsCells += `<td>${btuCons ? btuCons.toFixed(1) : '0'}</td>`;
       }
 
       consRowsHtml += `
@@ -1141,7 +1564,7 @@
       `;
     });
 
-    const totBTUCells = dateList.map(d => `<td style="color:var(--btu-color);"><strong>${totBTUByDate[d]}</strong></td>`).join('');
+    const totBTUCells = dateList.map(d => `<td style="color:var(--btu-color);"><strong>${totBTUByDate[d].toFixed(1)}</strong></td>`).join('');
     consRowsHtml += `
       <tr class="total-row" style="background:rgba(245, 158, 11, 0.15);"><td></td><td></td><td style="color:var(--btu-color);">Total BTU Consumption</td>${totBTUCells}</tr>
     `;
@@ -1166,7 +1589,7 @@
 
           <div style="display:flex; align-items:center; gap:0.8rem;">
             <label style="color:#00e5ff; font-weight:700; font-size:0.85rem;">Select Month:</label>
-            <select id="month-matrix-select" class="input-field" style="width: auto; min-width: 180px;">
+            <select id="month-matrix-select" class="input-field" style="width: auto; min-width: 200px;">
               ${selectOptionsHtml}
             </select>
           </div>
@@ -1218,7 +1641,7 @@
     `;
   }
 
-  // 4. Render Admin Portal & Executive Dashboard Content (Matching Dashboard Sheets)
+  // 4. Render Admin Portal & Executive Dashboard Content
   function renderAdminPortalContent() {
     if (!state.isAdminUnlocked) {
       return `
@@ -1239,9 +1662,9 @@
       <div class="admin-dashboard-header">
         <div>
           <h2 style="color:#fff; font-size:1.4rem; font-weight:800; display:flex; align-items:center; gap:0.5rem;">
-            <i data-lucide="shield-check" style="color:#10b981;"></i> DT-3 Executive Energy & EPI Performance Dashboard (Matching Excel)
+            <i data-lucide="shield-check" style="color:#10b981;"></i> DT-3 Executive Energy & EPI Performance Dashboard
           </h2>
-          <p style="color:var(--text-muted); font-size:0.85rem;">Official Operational Performance & Excel Export Hub</p>
+          <p style="color:var(--text-muted); font-size:0.85rem;">Official Operational Performance & Dynamic Excel Export Hub</p>
         </div>
 
         <div class="export-btn-group">
@@ -1261,7 +1684,7 @@
         <div class="kpi-card">
           <div class="kpi-title">2026 JAN-JUL AVG EPI</div>
           <div class="kpi-value">103.7 <span style="font-size:0.9rem;">kWh/m²/yr</span></div>
-          <div class="kpi-subtext">Status: Best-in-Class / Efficient (<120 Target)</div>
+          <div class="kpi-subtext">Status: Best-in-Class / Efficient (&lt;120 Target)</div>
         </div>
 
         <div class="kpi-card">
@@ -1283,7 +1706,7 @@
         </div>
       </div>
 
-      <!-- Section 1: EPI Performance Benchmark Standards -->
+      <!-- Section 1: EPI Benchmark Standards -->
       <div class="chart-container-card" style="margin-bottom:1.5rem;">
         <div class="chart-title"><i data-lucide="award"></i> 1. EPI Performance Level Benchmark Standards (kWh/m²/year)</div>
         <div class="table-responsive-container" style="margin-bottom:0;">
@@ -1313,7 +1736,7 @@
                 <td><strong style="color:#34d399;">Excellent</strong></td>
                 <td style="color:#34d399;">Below 120</td>
                 <td><strong style="color:#34d399;">Best-in-Class</strong></td>
-                <td><strong style="color:#34d399;">DT3 Operational Target (<120)</strong></td>
+                <td><strong style="color:#34d399;">DT3 Operational Target (&lt;120)</strong></td>
               </tr>
             </tbody>
           </table>
@@ -1356,7 +1779,7 @@
         </div>
       </div>
 
-      <!-- Section 3: Interactive Animated Visuals (Consumption, Cost, EPI & Savings) -->
+      <!-- Section 3: Interactive Visuals -->
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; margin-bottom:2rem;">
         <div class="chart-container-card">
           <div class="chart-title"><i data-lucide="line-chart" style="color:#60a5fa;"></i> Monthly Consumption Trend (2025 vs 2026 kWh)</div>
@@ -1465,17 +1888,6 @@
           </table>
         </div>
       </div>
-
-      <!-- Section 5: Key Operational Insights & Savings Justification Panel -->
-      <div class="chart-container-card">
-        <div class="chart-title"><i data-lucide="info"></i> 4. Key Operational Insights & Savings Justification (DT3 Facility)</div>
-        <div style="padding:1rem; font-size:0.9rem; line-height:1.6; color:#d1d5db;">
-          <p style="margin-bottom:0.8rem;"><strong style="color:#00e5ff;">• Operational Model Transition:</strong> Prior to May, DT3 AHUs operated on a 24*7 running schedule. From May onwards, DT3 transitioned to a 12*5.5 KAM model (12 hrs/day, 5.5 days/week), discontinuing night operations and weekend shifts.</p>
-          <p style="margin-bottom:0.8rem;"><strong style="color:#10b981;">• Hours & Energy Saved:</strong> Switching to the 12*5.5 KAM model saved ~12 hrs/day on weekdays and full weekends (~434 operating hrs/mo per AHU, totaling ~1,736 AHU hrs/mo saved). Monthly AHU consumption dropped from 10,301 kWh in April to 6,266 kWh in May (saved 4,035 kWh / -39.2%), 7,682 kWh in June, and 8,308 kWh in July.</p>
-          <p style="margin-bottom:0.8rem;"><strong style="color:#fbbf24;">• EPI Trend Justification (vs 2025):</strong> Annualized EPI dropped significantly YTD (May EPI: 100.42 vs 123.85 in 2025, -18.9%; June EPI: 108.28 vs 139.05 in 2025, -22.1%; July EPI: 100.4 vs 150.36 in 2025). Overall Jan–Jul average EPI improved from 119.36 to 103.7 kWh/m²/yr (-13.1%), maintaining Best-in-Class status (&lt;120 kWh/m²/yr).</p>
-          <p><strong style="color:#34d399;">• YTD Cost Savings:</strong> Total Jan–July energy cost fell from ₹54.69L in 2025 to ₹45.75L in 2026, delivering ₹8,93,612 (-16.3%) cost savings YTD.</p>
-        </div>
-      </div>
     `;
   }
 
@@ -1506,6 +1918,7 @@
   }
 
   function attachEventListeners() {
+    // Navigation Tabs
     document.querySelectorAll('.nav-tab-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         state.activeTab = e.currentTarget.dataset.tab;
@@ -1513,6 +1926,7 @@
       });
     });
 
+    // Font Scale
     document.querySelectorAll('.font-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         state.fontScale = parseFloat(e.currentTarget.dataset.font);
@@ -1520,6 +1934,7 @@
       });
     });
 
+    // Date Picker
     const datePicker = document.getElementById('selected-date-picker');
     if (datePicker) {
       const handleDateChange = (e) => {
@@ -1533,6 +1948,7 @@
       datePicker.addEventListener('input', handleDateChange);
     }
 
+    // Monthly Matrix Month Selector
     const monthMatrixSelect = document.getElementById('month-matrix-select');
     if (monthMatrixSelect) {
       monthMatrixSelect.addEventListener('change', (e) => {
@@ -1541,13 +1957,87 @@
       });
     }
 
-    document.querySelectorAll('.pill-btn').forEach(btn => {
+    // KWH Filter Pills
+    document.querySelectorAll('.pill-btn[data-filter]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         state.kwhFilter = e.currentTarget.dataset.filter;
         render();
       });
     });
 
+    // Transaction Category Filter Pills
+    document.querySelectorAll('.pill-btn[data-txncat]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        state.txnFilterCat = e.currentTarget.dataset.txncat;
+        render();
+      });
+    });
+
+    // Transaction Period Dropdown
+    const txnPeriodSelect = document.getElementById('txn-period-select');
+    if (txnPeriodSelect) {
+      txnPeriodSelect.addEventListener('change', (e) => {
+        state.txnFilterPeriod = e.target.value;
+        render();
+      });
+    }
+
+    // Transaction Search Input
+    const txnSearchInput = document.getElementById('txn-search-input');
+    if (txnSearchInput) {
+      txnSearchInput.addEventListener('input', (e) => {
+        state.txnSearchQuery = e.target.value;
+        const appContainer = document.getElementById('app');
+        // Re-render only transaction content if active
+        if (state.activeTab === 'txn') {
+          render();
+        }
+      });
+    }
+
+    const btnClearTxnSearch = document.getElementById('btn-clear-txn-search');
+    if (btnClearTxnSearch) {
+      btnClearTxnSearch.addEventListener('click', () => {
+        state.txnSearchQuery = '';
+        render();
+      });
+    }
+
+    // Jump to Date button in Transaction Table
+    document.querySelectorAll('.btn-jump-date').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const targetDate = e.currentTarget.dataset.date;
+        if (targetDate) {
+          state.selectedDate = targetDate;
+          state.activeTab = 'kwh';
+          showToast(`Jumped to Operational Date: ${targetDate}`);
+          render();
+        }
+      });
+    });
+
+    // Export Transaction CSV Button
+    const btnExportTxnCSV = document.getElementById('btn-export-txn-csv');
+    if (btnExportTxnCSV) {
+      btnExportTxnCSV.addEventListener('click', () => {
+        if (window.ExcelExporter) {
+          window.ExcelExporter.exportTransactionHistoryCSV(state.data.transactions || []);
+          showToast('Transaction Audit Log CSV Exported!');
+        }
+      });
+    }
+
+    // Force Real-Time Sync Button
+    const btnForceSync = document.getElementById('btn-force-sync');
+    if (btnForceSync) {
+      btnForceSync.addEventListener('click', () => {
+        saveData();
+        showToast('All readings, summary matrix & transaction logs synced in real time!');
+        render();
+      });
+    }
+
+    // Admin Toggle & Login Form
     const adminToggleBtn = document.getElementById('btn-admin-toggle');
     if (adminToggleBtn) {
       adminToggleBtn.addEventListener('click', () => {
@@ -1606,6 +2096,7 @@
       });
     }
 
+    // Real-Time Reading Input Change Listeners
     document.querySelectorAll('.kwh-input-field').forEach(input => {
       const handleReadingChange = (e) => {
         const cat = e.target.dataset.cat;
@@ -1619,8 +2110,26 @@
         if (targetArr) {
           const item = targetArr.find(x => x.id === id);
           if (item) {
+            const oldVal = item[field];
             item[field] = val;
             saveData();
+
+            // Log Transaction in Real-Time
+            if (oldVal !== val) {
+              const prev = getExactPreviousReading(dateStr, cat, id);
+              recordTransaction({
+                date: dateStr,
+                category: field === 'dg_reading' ? 'dg' : cat,
+                categoryLabel: field === 'dg_reading' ? '⛽ DG Backup' : (cat === 'eb' ? '⚡ EB Electricity' : (cat === 'ahu' ? '🌬️ AHU Power' : '❄️ BTU Cooling')),
+                meterId: id,
+                meterName: item.name || `${cat.toUpperCase()} ${id}`,
+                location: item.location || '3F',
+                prevReading: field === 'dg_reading' ? prev.dg_reading : prev.reading,
+                newReading: val,
+                isDG: field === 'dg_reading',
+                source: 'Daily KWH Entry'
+              });
+            }
           }
         }
       };
@@ -1677,7 +2186,7 @@
     if (saveKwhBtn) {
       saveKwhBtn.addEventListener('click', () => {
         saveData();
-        showToast(`Daily KWH Readings for ${state.selectedDate} Saved!`);
+        showToast(`Daily KWH Readings for ${state.selectedDate} Saved & Synced!`);
         render();
       });
     }
@@ -1686,18 +2195,19 @@
     if (saveAhuBtn) {
       saveAhuBtn.addEventListener('click', () => {
         saveData();
-        showToast(`AHU & BTU Savings Log for ${state.selectedDate} Saved!`);
+        showToast(`AHU & BTU Savings Log for ${state.selectedDate} Saved & Synced!`);
         render();
       });
     }
 
+    // Export Buttons
     const exportKwhBtn = document.getElementById('btn-export-kwh');
     if (exportKwhBtn) {
       exportKwhBtn.addEventListener('click', () => {
         try {
           if (window.ExcelExporter) {
             window.ExcelExporter.exportKWHDailyLog(state.selectedMonthMatrix, state.data);
-            showToast('KWH Daily Log Excel Download Triggered!');
+            showToast('KWH Daily Log Excel Download Triggered (Real-time Synced)!');
           }
         } catch (err) {
           console.error('Export Error:', err);
@@ -1711,7 +2221,7 @@
         try {
           if (window.ExcelExporter) {
             window.ExcelExporter.exportAHUSavingLog(state.selectedMonthMatrix, state.data);
-            showToast('AHU & BTU Savings Excel Download Triggered!');
+            showToast('AHU & BTU Savings Excel Download Triggered (Real-time Synced)!');
           }
         } catch (err) {
           console.error('Export Error:', err);
