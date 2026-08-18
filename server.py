@@ -136,6 +136,9 @@ def ensure_month_sheet_in_dt3(wb, year, month):
     target = wb.copy_worksheet(source)
     target.title = new_sheet_name
     
+    # Set title banner in Row 1
+    target.cell(1, 1, f"{m_str.upper()} -  {year}")
+    
     # Calculate days in month
     import calendar
     _, days_in_month = calendar.monthrange(year, month)
@@ -145,13 +148,23 @@ def ensure_month_sheet_in_dt3(wb, year, month):
         d = datetime.date(year, month, day)
         day_name = d.strftime('%a')
         
-        target.cell(4, col, datetime.datetime(year, month, day, 0, 0))
-        target.cell(5, col, day_name)
+        # Row 2 & 3: Readings header Date & Day
+        target.cell(2, col, datetime.datetime(year, month, day, 0, 0))
+        target.cell(3, col, day_name)
+        target.cell(4, col, 'Time')
+        target.cell(5, col, datetime.time(8, 0))
+
+        # Row 40 & 41: Consumptions section Date & Day
         target.cell(40, col, datetime.datetime(year, month, day, 0, 0))
         target.cell(41, col, day_name)
+        target.cell(42, col, 'Time')
+        target.cell(43, col, datetime.time(8, 0))
+
         if target.max_row >= 84:
             target.cell(84, col, datetime.datetime(year, month, day, 0, 0))
             target.cell(85, col, day_name)
+            target.cell(86, col, 'Time')
+            target.cell(87, col, datetime.time(8, 0))
             
     if target.max_row >= 83:
         target.cell(83, 5, f"{m_str.upper()} - {year}    EV METER READING")
@@ -159,6 +172,12 @@ def ensure_month_sheet_in_dt3(wb, year, month):
     return new_sheet_name
 
 class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path.startswith('/api/sync'):
+            self.handle_sync_get()
+        else:
+            super().do_GET()
+
     def do_POST(self):
         if self.path == '/api/export/kwh':
             self.handle_export_kwh()
@@ -166,20 +185,45 @@ class EnergyTrackerHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_export_ahu()
         elif self.path == '/api/save':
             self.handle_save_data()
+        elif self.path.startswith('/api/sync'):
+            self.handle_sync_post()
         else:
             self.send_error(404, "Endpoint not found")
+
+    def handle_sync_get(self):
+        try:
+            data = None
+            if os.path.exists('user_data.json'):
+                with open('user_data.json', 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            mtime = os.path.getmtime('user_data.json') if os.path.exists('user_data.json') else 0
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "status": "success",
+                "data": data,
+                "version": int(mtime * 1000),
+                "lastUpdated": datetime.datetime.fromtimestamp(mtime).isoformat() if mtime else None
+            }).encode('utf-8'))
+        except Exception as e:
+            self.send_error(500, f"Error getting sync data: {str(e)}")
+
+    def handle_sync_post(self):
+        self.handle_save_data()
 
     def handle_save_data(self):
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length)
         try:
             payload = json.loads(post_data.decode('utf-8'))
+            data_to_save = payload.get('data', payload)
             with open('user_data.json', 'w', encoding='utf-8') as f:
-                json.dump(payload, f, indent=2)
+                json.dump(data_to_save, f, indent=2)
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "success"}).encode('utf-8'))
+            self.wfile.write(json.dumps({"status": "success", "version": int(datetime.datetime.now().timestamp()*1000)}).encode('utf-8'))
         except Exception as e:
             self.send_error(500, f"Error saving data: {str(e)}")
 

@@ -1,15 +1,15 @@
 /**
- * Dynamic Real-Time Excel Exporter Engine for AHU Saving Log, Daily KWH Energy Report & Transactions
- * Supports both Server-Side (OpenPyXL) and Client-Side (SheetJS / XLSX) with full August 2026 & dynamic month synchronization
+ * Enhanced Real-Time Excel Exporter Engine for AHU Saving Log, Daily KWH Energy Report & Single Month Dashboards
+ * Supports both Server-Side (OpenPyXL) and Client-Side (SheetJS / XLSX) with full August 2026 & multi-month synchronization
  */
 
 window.ExcelExporter = {
-  // Export DT-3 KWH Excel file with real-time August 2026 & all dynamic data
+  // Master DT-3 KWH Excel Export (all sheets synchronized)
   exportKWHDailyLog: function (selectedMonth, trackerData) {
     trackerData = trackerData || {};
     
-    // 1. Try Server-Side API first
-    if (window.location.protocol.startsWith('http')) {
+    // 1. Try Server-Side API first if hosted on Python server
+    if (window.location.protocol.startsWith('http') && !window.location.hostname.includes('vercel.app')) {
       fetch('/api/export/kwh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -41,8 +41,7 @@ window.ExcelExporter = {
       })
       .then(buffer => {
         if (typeof XLSX === 'undefined') {
-          // If XLSX library isn't loaded, fallback to raw template download
-          this.triggerBlobDownload(new Blob([buffer]), fileName);
+          this.downloadFolderFile(fileName);
           return;
         }
 
@@ -55,39 +54,47 @@ window.ExcelExporter = {
           const ws = wb.Sheets[sheetName];
           if (!ws) return;
 
-          // Locate date columns in row 4 (1-indexed row 4 is index 3)
-          // Scan row 4 cells
-          const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:Z100');
+          const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:AJ100');
           const colDateMap = {};
 
+          // Intelligent Date Column Locator: Scan header rows (Row 2, 4, 40, 84 - 0-indexed: 1, 3, 39, 83)
+          const checkRows = [1, 3, 39, 83];
           for (let C = 4; C <= range.e.c; C++) {
-            const cellAddress = XLSX.utils.encode_cell({ r: 3, c: C }); // Row 4 (index 3)
-            const cell = ws[cellAddress];
-            if (cell && cell.v) {
-              let dateStr = '';
-              if (cell.v instanceof Date) {
-                dateStr = cell.v.toISOString().slice(0, 10);
-              } else if (typeof cell.v === 'number') {
-                // Excel serial date to JS Date
-                const dateObj = new Date(Math.round((cell.v - 25569) * 86400 * 1000));
-                dateStr = dateObj.toISOString().slice(0, 10);
-              } else if (typeof cell.v === 'string' && cell.v.includes('-')) {
-                dateStr = cell.v.slice(0, 10);
-              }
-              if (dateStr) {
-                colDateMap[dateStr] = C;
+            for (let rIdx of checkRows) {
+              const cellAddress = XLSX.utils.encode_cell({ r: rIdx, c: C });
+              const cell = ws[cellAddress];
+              if (cell && cell.v) {
+                let dateStr = '';
+                if (cell.v instanceof Date) {
+                  dateStr = cell.v.toISOString().slice(0, 10);
+                } else if (typeof cell.v === 'number' && cell.v > 40000 && cell.v < 60000) {
+                  // Excel serial date to JS Date
+                  const dateObj = new Date(Math.round((cell.v - 25569) * 86400 * 1000));
+                  dateStr = dateObj.toISOString().slice(0, 10);
+                } else if (typeof cell.v === 'string' && cell.v.includes('-') && cell.v.length >= 10) {
+                  dateStr = cell.v.slice(0, 10);
+                }
+                if (dateStr && !colDateMap[dateStr]) {
+                  colDateMap[dateStr] = C;
+                }
               }
             }
           }
 
-          // If dates match in kwhDaily, update cell values
+          // If sheet is Aug-2026, ensure header banner and August dates are written
+          if (sheetName.toLowerCase().includes('aug')) {
+            const a1Addr = XLSX.utils.encode_cell({ r: 0, c: 0 });
+            ws[a1Addr] = { t: 's', v: 'AUGUST -  2026' };
+          }
+
+          // Populate user entered readings for dates that match
           Object.keys(kwhDaily).forEach(dStr => {
             if (colDateMap[dStr] !== undefined) {
               const colIdx = colDateMap[dStr];
               const dayData = kwhDaily[dStr];
 
-              // EB meters (rows 6, 8, 10, 12, 14, 16, 18, 20)
-              const ebRows = [5, 7, 9, 11, 13, 15, 17, 19]; // 0-indexed
+              // EB meters (rows 6, 8, 10, 12, 14, 16, 18, 20 -> 0-indexed: 5, 7, 9, 11, 13, 15, 17, 19)
+              const ebRows = [5, 7, 9, 11, 13, 15, 17, 19];
               (dayData.eb || []).forEach((ebItem, idx) => {
                 if (idx < ebRows.length) {
                   const r = ebRows[idx];
@@ -100,7 +107,7 @@ window.ExcelExporter = {
                 }
               });
 
-              // AHU meters (rows 23, 25, 27, 29) -> 0-indexed: 22, 24, 26, 28
+              // AHU meters (rows 23, 25, 27, 29 -> 0-indexed: 22, 24, 26, 28)
               const ahuRows = [22, 24, 26, 28];
               (dayData.ahu || []).forEach((ahuItem, idx) => {
                 if (idx < ahuRows.length) {
@@ -114,7 +121,7 @@ window.ExcelExporter = {
                 }
               });
 
-              // BTU meters (rows 32, 33, 34, 35) -> 0-indexed: 31, 32, 33, 34
+              // BTU meters (rows 32, 33, 34, 35 -> 0-indexed: 31, 32, 33, 34)
               const btuRows = [31, 32, 33, 34];
               (dayData.btu || []).forEach((btuItem, idx) => {
                 if (idx < btuRows.length) {
@@ -137,11 +144,169 @@ window.ExcelExporter = {
       });
   },
 
+  // Dedicated Single Month Excel Exporter (High fidelity, standalone clean workbook)
+  exportSingleMonthKWH: function(monthKey, trackerData, rates) {
+    rates = rates || { kwh: 7.45, btu: 4.30, dg: 33.85 };
+    trackerData = trackerData || {};
+    const kwhDaily = trackerData.kwh_daily || {};
+
+    if (typeof XLSX === 'undefined') {
+      alert("Excel library is loading, please try again in a second.");
+      return;
+    }
+
+    // Filter dates for this month
+    const matchingDates = Object.keys(kwhDaily)
+      .filter(d => {
+        const dt = new Date(d);
+        const mStr = dt.toLocaleString('en-US', { month: 'short' });
+        const yStr = dt.toLocaleString('en-US', { year: '2-digit' });
+        return `${mStr}-${yStr}` === monthKey;
+      })
+      .sort();
+
+    if (matchingDates.length === 0) {
+      alert(`No daily readings recorded for ${monthKey} yet.`);
+      return;
+    }
+
+    const wb = XLSX.utils.book_new();
+
+    // 1. Sheet 1: Daily Energy Consumption Breakdown
+    const consData = [
+      [`CBRE FACILITY MANAGEMENT - DAILY ENERGY CONSUMPTION REPORT (${monthKey})`],
+      [`Generated: ${new Date().toLocaleString('en-US')} | KWH Rate: Rs. ${rates.kwh} | DG Rate: Rs. ${rates.dg} | BTU Rate: Rs. ${rates.btu}`],
+      [],
+      ["Date", "Day", "Total EB (kWh)", "Total DG (kWh)", "Total Power Cum. (kWh)", "Total AHU (kWh)", "Total BTU (Units)", "Daily Cost (INR)"]
+    ];
+
+    let sumEB = 0, sumDG = 0, sumCum = 0, sumAHU = 0, sumBTU = 0, sumCost = 0;
+
+    matchingDates.forEach(dStr => {
+      const dt = new Date(dStr);
+      const dayName = dt.toLocaleString('en-US', { weekday: 'short' });
+      const dayData = kwhDaily[dStr];
+
+      let dayEB = 0, dayDG = 0, dayAHU = 0, dayBTU = 0;
+
+      // EB
+      (dayData.eb || []).forEach(m => {
+        // Calculate consumption from prev reading
+        const prev = (window.TrackerUtils?.getExactPreviousReading ? window.TrackerUtils.getExactPreviousReading(dStr, 'eb', m.id) : { reading: m.reading, dg_reading: m.dg_reading });
+        const cEB = Math.max(0, (Number(m.reading) || 0) - (Number(prev.reading) || 0));
+        const cDG = Math.max(0, (Number(m.dg_reading) || 0) - (Number(prev.dg_reading) || 0));
+        dayEB += cEB;
+        dayDG += cDG;
+      });
+
+      // AHU
+      (dayData.ahu || []).forEach(m => {
+        const prev = (window.TrackerUtils?.getExactPreviousReading ? window.TrackerUtils.getExactPreviousReading(dStr, 'ahu', m.id) : { reading: m.reading });
+        const cAHU = Math.max(0, (Number(m.reading) || 0) - (Number(prev.reading) || 0));
+        dayAHU += cAHU;
+      });
+
+      // BTU
+      (dayData.btu || []).forEach(m => {
+        const prev = (window.TrackerUtils?.getExactPreviousReading ? window.TrackerUtils.getExactPreviousReading(dStr, 'btu', m.id) : { reading: m.reading });
+        const cBTU = Math.max(0, (Number(m.reading) || 0) - (Number(prev.reading) || 0));
+        dayBTU += cBTU;
+      });
+
+      const dayCum = dayEB + dayDG;
+      const dayCost = (dayEB * rates.kwh) + (dayDG * rates.dg) + (dayBTU * rates.btu);
+
+      sumEB += dayEB;
+      sumDG += dayDG;
+      sumCum += dayCum;
+      sumAHU += dayAHU;
+      sumBTU += dayBTU;
+      sumCost += dayCost;
+
+      consData.push([
+        dStr,
+        dayName,
+        Number(dayEB.toFixed(1)),
+        Number(dayDG.toFixed(1)),
+        Number(dayCum.toFixed(1)),
+        Number(dayAHU.toFixed(1)),
+        Number(dayBTU.toFixed(1)),
+        Number(dayCost.toFixed(2))
+      ]);
+    });
+
+    // Add Totals & Averages
+    const count = matchingDates.length;
+    consData.push([]);
+    consData.push([
+      "MONTH TOTAL",
+      `${count} Days`,
+      Number(sumEB.toFixed(1)),
+      Number(sumDG.toFixed(1)),
+      Number(sumCum.toFixed(1)),
+      Number(sumAHU.toFixed(1)),
+      Number(sumBTU.toFixed(1)),
+      Number(sumCost.toFixed(2))
+    ]);
+    consData.push([
+      "DAILY AVERAGE",
+      "-",
+      Number((sumEB / count).toFixed(1)),
+      Number((sumDG / count).toFixed(1)),
+      Number((sumCum / count).toFixed(1)),
+      Number((sumAHU / count).toFixed(1)),
+      Number((sumBTU / count).toFixed(1)),
+      Number((sumCost / count).toFixed(2))
+    ]);
+
+    const wsCons = XLSX.utils.aoa_to_sheet(consData);
+    XLSX.utils.book_append_sheet(wb, wsCons, `${monthKey} Consumption`);
+
+    // 2. Sheet 2: Raw Daily Meter Readings
+    const meterHeaders = ["Date", "Day"];
+    const ebNames = ["EB-1 (540430038840)", "EB-2 (540430038845)", "EB-3 (540430038844)", "EB-4 (540430038821)", "EB-5 (540430038849)", "EB-6 (540430038646)", "EB-7 (540430038843)", "EB-8 (540430038848)"];
+    ebNames.forEach(n => meterHeaders.push(`${n} Reading`, `${n} DG`));
+    for (let i = 1; i <= 4; i++) meterHeaders.push(`AHU-${i} Reading`, `AHU-${i} DG`);
+    for (let i = 1; i <= 4; i++) meterHeaders.push(`BTU-${i} Reading`);
+
+    const readingsData = [
+      [`CBRE FACILITY MANAGEMENT - DAILY METER READINGS LOG (${monthKey})`],
+      meterHeaders
+    ];
+
+    matchingDates.forEach(dStr => {
+      const dt = new Date(dStr);
+      const dayName = dt.toLocaleString('en-US', { weekday: 'short' });
+      const dayData = kwhDaily[dStr];
+      const row = [dStr, dayName];
+
+      (dayData.eb || []).forEach(m => {
+        row.push(Number(m.reading || 0), Number(m.dg_reading || 0));
+      });
+      (dayData.ahu || []).forEach(m => {
+        row.push(Number(m.reading || 0), Number(m.dg_reading || 0));
+      });
+      (dayData.btu || []).forEach(m => {
+        row.push(Number(m.reading || 0));
+      });
+
+      readingsData.push(row);
+    });
+
+    const wsReadings = XLSX.utils.aoa_to_sheet(readingsData);
+    XLSX.utils.book_append_sheet(wb, wsReadings, `${monthKey} Readings`);
+
+    // Write file
+    const outArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const outFileName = `DT3_Energy_Report_${monthKey}.xlsx`;
+    this.triggerBlobDownload(new Blob([outArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), outFileName);
+  },
+
   // Export AHU Saving Excel file
   exportAHUSavingLog: function (selectedMonth, trackerData) {
     trackerData = trackerData || {};
 
-    if (window.location.protocol.startsWith('http')) {
+    if (window.location.protocol.startsWith('http') && !window.location.hostname.includes('vercel.app')) {
       fetch('/api/export/ahu', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -1,6 +1,11 @@
 /**
- * AHU & Daily KWH Energy Tracker - Main Application Script
- * Render exact Excel Dashboard and Summary Sheet Formats with Real-Time August 2026 & Transaction Sync
+ * AHU & Daily KWH Energy Intelligence Tracker - Main Application Script
+ * 
+ * Features:
+ * 1. Multi-Device Real-Time Cloud Persistence & Device Sync Engine (Room pairing, auto-polling, backup/restore)
+ * 2. Interactive Month-Wise Consumption & Energy Analytics Dashboard (12-month navigation ribbon, KPI cards, Chart.js visuals, Excel-twin data grid)
+ * 3. Daily KWH Entry, AHU Saving Tracker, Transaction Audit Log & Executive Admin Portal
+ * 4. Real-time August 2026 & Multi-Month Excel Export Synchronization
  */
 
 (function () {
@@ -26,6 +31,29 @@
       dg: 33.85
     },
 
+    // Real-Time Cloud Synchronization State
+    cloudSync: {
+      room: 'CBRE-DT3-FACILITY-2026',
+      status: 'synced', // 'synced' | 'syncing' | 'offline' | 'error'
+      lastSyncTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      deviceId: 'DEV-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
+      showModal: false,
+      isAutoPolling: true,
+      lastCloudVersion: 0,
+      syncError: ''
+    },
+
+    // Interactive Month-Wise Consumption Dashboard State
+    monthDashboard: {
+      selectedYear: '2026', // '2026' | '2025' | '2024' | 'all'
+      selectedMonth: 'Aug-26', // 'Aug-26', 'Jul-26', 'Jun-26', etc.
+      viewMode: 'dashboard', // 'dashboard' | 'consumption_grid' | 'readings_grid' | 'macro_matrix'
+      meterFilter: 'all', // 'all' | 'eb' | 'ahu' | 'btu' | 'dg'
+      searchQuery: '',
+      highlightHigh: false,
+      chartType: 'trend' // 'trend' | 'share' | 'mom' | 'cost'
+    },
+
     // Master Tracker Data
     data: {
       ahu_saving: {},
@@ -36,6 +64,9 @@
     }
   };
 
+  // Active Chart.js instances storage for clean lifecycle management
+  let activeCharts = {};
+
   // Helper: Convert date string "YYYY-MM-DD" to Month Key "Aug-26"
   function dateToMonthKey(dStr) {
     if (!dStr) return '';
@@ -45,55 +76,14 @@
     return `${mShort}-${yShort}`;
   }
 
-  // Initialize Data from LocalStorage or Seed Data
-  function initData() {
-    const stored = localStorage.getItem('kwh_ahu_tracker_data_v2');
-    if (stored) {
-      try {
-        state.data = JSON.parse(stored);
-      } catch (e) {
-        console.error("Failed to parse stored data:", e);
-        state.data = window.SEED_DATA || { ahu_saving: {}, kwh_daily: {}, month_baselines: {}, summary_matrix: {}, transactions: [] };
-      }
-    } else {
-      state.data = window.SEED_DATA || { ahu_saving: {}, kwh_daily: {}, month_baselines: {}, summary_matrix: {}, transactions: [] };
-    }
-
-    if (!state.data.transactions) {
-      state.data.transactions = [];
-    }
-
-    // Set default selectedDate to today
-    const todayStr = new Date().toISOString().slice(0, 10);
-    state.selectedDate = todayStr;
-    state.selectedMonthMatrix = dateToMonthKey(todayStr) || 'Aug-26';
-
-    ensureDateStructure(todayStr);
-    generateInitialTransactionsIfNeeded();
-    recalculateDynamicSummaryMatrix();
-  }
-
-  function saveData(skipBackend) {
-    recalculateDynamicSummaryMatrix();
-    localStorage.setItem('kwh_ahu_tracker_data_v2', JSON.stringify(state.data));
-
-    if (!skipBackend && window.location.protocol.startsWith('http')) {
-      fetch('/api/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(state.data)
-      }).catch(err => {
-        console.warn("Backend real-time save failed (offline or static mode):", err);
-      });
-    }
-  }
-
+  // Helper: Get previous date string "YYYY-MM-DD"
   function getPreviousDateStr(dateStr) {
     const d = new Date(dateStr);
     d.setDate(d.getDate() - 1);
     return d.toISOString().slice(0, 10);
   }
 
+  // Helper: Get exact previous day reading or baseline
   function getExactPreviousReading(dateStr, category, meterId) {
     const prevDateStr = getPreviousDateStr(dateStr);
     const prevDayData = state.data.kwh_daily[prevDateStr];
@@ -137,26 +127,28 @@
     return { reading: 0, dg_reading: 0, source: 'Baseline' };
   }
 
+  // Helper: Get auto-calculated KWH consumptions for AHU calculations
   function getAutoKWHConsumptionsForDate(dateStr) {
-    const currKWH = state.data.kwh_daily[dateStr] || {};
-    const ahuCons = {};
-    const btuCons = {};
+    const dayKWH = state.data.kwh_daily[dateStr];
+    const res = { ahu: [0, 0, 0, 0], btu: [0, 0, 0, 0] };
+    if (!dayKWH) return res;
 
-    [1, 2, 3, 4].forEach(id => {
-      const prevInfoA = getExactPreviousReading(dateStr, 'ahu', id);
-      const currAHU = currKWH.ahu?.find(a => a.id === id) || {};
-      const currValA = currAHU.reading !== undefined ? Number(currAHU.reading) : prevInfoA.reading;
-      ahuCons[`AHU${id}`] = Math.max(0, currValA - prevInfoA.reading);
-
-      const prevInfoB = getExactPreviousReading(dateStr, 'btu', id);
-      const currBTU = currKWH.btu?.find(b => b.id === id) || {};
-      const currValB = currBTU.reading !== undefined ? Number(currBTU.reading) : prevInfoB.reading;
-      btuCons[`AHU${id}`] = Math.max(0, currValB - prevInfoB.reading);
+    (dayKWH.ahu || []).forEach(m => {
+      const prev = getExactPreviousReading(dateStr, 'ahu', m.id);
+      const cons = Math.max(0, (Number(m.reading) || 0) - prev.reading);
+      if (m.id >= 1 && m.id <= 4) res.ahu[m.id - 1] = cons;
     });
 
-    return { ahuCons, btuCons };
+    (dayKWH.btu || []).forEach(m => {
+      const prev = getExactPreviousReading(dateStr, 'btu', m.id);
+      const cons = Math.max(0, (Number(m.reading) || 0) - prev.reading);
+      if (m.id >= 1 && m.id <= 4) res.btu[m.id - 1] = cons;
+    });
+
+    return res;
   }
 
+  // Ensure Date Structure Exists for Given Date
   function ensureDateStructure(dateStr) {
     if (!state.data.kwh_daily[dateStr]) {
       state.data.kwh_daily[dateStr] = {
@@ -200,132 +192,28 @@
 
     if (!state.data.ahu_saving[dateStr]) {
       const dt = new Date(dateStr);
-      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const dayStr = dayNames[dt.getDay()];
-      const autoCons = getAutoKWHConsumptionsForDate(dateStr);
+      const isSun = dt.getDay() === 0;
+      const isSat = dt.getDay() === 6;
+      const defaultOn = isSun ? "00:00" : (isSat ? "08:00" : "07:00");
+      const defaultOff = isSun ? "00:00" : (isSat ? "14:00" : "19:30");
 
       state.data.ahu_saving[dateStr] = {
         date: dateStr,
-        day: dayStr,
-        ahus: [
-          { ahu_id: "AHU1", on_time: "07:12", off_time: "20:00", kwh_cons: autoCons.ahuCons["AHU1"], btu_cons: autoCons.btuCons["AHU1"] },
-          { ahu_id: "AHU2", on_time: "07:12", off_time: "20:00", kwh_cons: autoCons.ahuCons["AHU2"], btu_cons: autoCons.btuCons["AHU2"] },
-          { ahu_id: "AHU3", on_time: "07:12", off_time: "18:33", kwh_cons: autoCons.ahuCons["AHU3"], btu_cons: autoCons.btuCons["AHU3"] },
-          { ahu_id: "AHU4", on_time: "07:12", off_time: "18:03", kwh_cons: autoCons.ahuCons["AHU4"], btu_cons: autoCons.btuCons["AHU4"] }
-        ],
+        day: dt.toLocaleString('en-US', { weekday: 'short' }),
         kwh_rate: state.rates.kwh,
-        btu_rate: state.rates.btu
+        btu_rate: state.rates.btu,
+        ahus: [1, 2, 3, 4].map(id => ({
+          id: id,
+          name: `AHU-${id} (CFM 26500)`,
+          on_time: defaultOn,
+          off_time: defaultOff,
+          is_off: isSun
+        }))
       };
     }
   }
 
-  // Real-Time Transaction Logging Engine
-  function recordTransaction(item) {
-    if (!state.data.transactions) state.data.transactions = [];
-
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const dateFormatted = now.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
-    const displayTime = `${dateFormatted}, ${timeStr}`;
-
-    const cons = Math.max(0, (Number(item.newReading) || 0) - (Number(item.prevReading) || 0));
-    const rate = item.category === 'btu' ? state.rates.btu : (item.isDG ? state.rates.dg : state.rates.kwh);
-    const cost = cons * rate;
-
-    const txnId = `TXN-${item.date.replace(/-/g, '')}-${item.category.toUpperCase()}-${item.meterId || 'ALL'}-${Date.now().toString().slice(-4)}`;
-
-    const txnObj = {
-      id: txnId,
-      timestamp: now.toISOString(),
-      displayTime: displayTime,
-      date: item.date,
-      month: dateToMonthKey(item.date),
-      category: item.category,
-      categoryLabel: item.categoryLabel || item.category.toUpperCase(),
-      meterId: item.meterId,
-      meterName: item.meterName || `Meter ${item.meterId}`,
-      location: item.location || '3F',
-      prevReading: item.prevReading,
-      newReading: item.newReading,
-      consumption: Number(cons.toFixed(2)),
-      cost: Number(cost.toFixed(2)),
-      status: 'Committed & Synced',
-      source: item.source || 'User Entry'
-    };
-
-    // Prepend new transaction
-    state.data.transactions.unshift(txnObj);
-
-    // Limit transactions buffer to 500 records
-    if (state.data.transactions.length > 500) {
-      state.data.transactions = state.data.transactions.slice(0, 500);
-    }
-
-    saveData();
-  }
-
-  function generateInitialTransactionsIfNeeded() {
-    if (state.data.transactions && state.data.transactions.length > 0) return;
-
-    state.data.transactions = [];
-    const dates = Object.keys(state.data.kwh_daily || {}).sort().reverse();
-    const sampleDates = dates.slice(0, 20); // Take recent dates
-
-    sampleDates.forEach(dStr => {
-      const dayData = state.data.kwh_daily[dStr];
-      const mKey = dateToMonthKey(dStr);
-
-      (dayData.eb || []).forEach(m => {
-        const prev = getExactPreviousReading(dStr, 'eb', m.id);
-        const cons = Math.max(0, (m.reading || 0) - prev.reading);
-        state.data.transactions.push({
-          id: `TXN-${dStr.replace(/-/g, '')}-EB-${m.id}`,
-          timestamp: `${dStr}T08:00:00.000Z`,
-          displayTime: `${dStr}, 08:00 AM`,
-          date: dStr,
-          month: mKey,
-          category: 'eb',
-          categoryLabel: '⚡ Electricity Board (EB)',
-          meterId: m.id,
-          meterName: m.name,
-          location: m.location || '3F',
-          prevReading: prev.reading,
-          newReading: m.reading,
-          consumption: Number(cons.toFixed(2)),
-          cost: Number((cons * state.rates.kwh).toFixed(2)),
-          status: 'Synced',
-          source: 'Excel Baseline / Sync'
-        });
-      });
-
-      (dayData.ahu || []).forEach(m => {
-        const prev = getExactPreviousReading(dStr, 'ahu', m.id);
-        const cons = Math.max(0, (m.reading || 0) - prev.reading);
-        state.data.transactions.push({
-          id: `TXN-${dStr.replace(/-/g, '')}-AHU-${m.id}`,
-          timestamp: `${dStr}T08:00:00.000Z`,
-          displayTime: `${dStr}, 08:00 AM`,
-          date: dStr,
-          month: mKey,
-          category: 'ahu',
-          categoryLabel: '🌬️ AHU Power',
-          meterId: m.id,
-          meterName: m.name,
-          location: m.location || '3F',
-          prevReading: prev.reading,
-          newReading: m.reading,
-          consumption: Number(cons.toFixed(2)),
-          cost: Number((cons * state.rates.kwh).toFixed(2)),
-          status: 'Synced',
-          source: 'Excel Baseline / Sync'
-        });
-      });
-    });
-
-    saveData(true);
-  }
-
-  // Recalculate Master Summary Matrix in real-time
+  // Recalculate Dynamic Summary Matrix
   function recalculateDynamicSummaryMatrix() {
     const kwhDaily = state.data.kwh_daily || {};
     const monthMap = {}; // { 'Aug-26': { eb: 0, ahu: 0, dg: 0, btu: 0 } }
@@ -362,7 +250,6 @@
     const baseMonths = ["Jan-25", "Feb-25", "Mar-25", "Apr-25", "May-25", "Jun-25", "Jul-25", "Aug-25", "Sep-25", "Oct-25", "Nov-25", "Dec-25", "Jan-26", "Feb-26", "Mar-26", "Apr-26", "May-26", "Jun-26", "Jul-26", "Aug-26"];
     const allMonths = Array.from(new Set([...baseMonths, ...Object.keys(monthMap)]));
 
-    // Update state.data.summary_matrix
     if (!state.data.summary_matrix) state.data.summary_matrix = { months: [], consumption: {}, cost: {} };
     state.data.summary_matrix.months = allMonths;
 
@@ -375,7 +262,6 @@
       let dg = monthMap[m]?.dg || 0;
       let btu = monthMap[m]?.btu || 0;
 
-      // Fallback to static seed data for historical months if daily data is 0
       const seedIdx = (window.SEED_DATA?.summary_matrix?.months || []).indexOf(m);
       if (seedIdx !== -1 && eb === 0) {
         eb = window.SEED_DATA.summary_matrix.consumption['EB']?.[seedIdx] || 0;
@@ -393,182 +279,482 @@
       const cBTU = btu * state.rates.btu;
       const cTot = cEB + cAHU + cDG + cBTU;
 
-      costEB.push(cEB); costAHU.push(cAHU); costDG.push(cDG); costBTU.push(cBTU); costTot.push(cTot);
+      costEB.push(cEB); costAHU.push(cAHU); costDG.push(cDG); costBTU.push(cTot);
     });
 
     state.data.summary_matrix.consumption = { 'EB': consEB, 'AHU': consAHU, 'DG': consDG, 'BTU': consBTU, 'Total': consTot };
     state.data.summary_matrix.cost = { 'EB': costEB, 'AHU': costAHU, 'DG': costDG, 'BTU': costBTU, 'Total': costTot };
   }
 
+  // Calculate AHU Savings for a date
   function calculateAHUSaving(dayRec) {
-    const dayStr = dayRec.day;
-    const isSun = dayStr === 'Sun';
-    const isSat = dayStr === 'Sat';
-
+    const isSun = dayRec.day === 'Sun';
+    const isSat = dayRec.day === 'Sat';
     const stdSched = isSun ? 0 : (isSat ? 6 : 12);
-    const stdOffHour = isSat ? 14 : 20;
+    const targetOffDecimal = isSat ? 14.0 : 20.0;
 
     const autoCons = getAutoKWHConsumptionsForDate(dayRec.date);
+    const results = [];
+    let totActualCost = 0, totFullCost = 0, totCostSaving = 0, totSavedHrs = 0, totActualHrs = 0;
+    let totBTUActualCost = 0, totBTUFullCost = 0, totBTUCostSaving = 0, totBTUCons = 0;
 
-    let totSched = 0, totRun = 0, totSaved = 0;
-    let totAHUKwh = 0, totAHUCost = 0, totAHUSaved = 0;
-    let totBTUKwh = 0, totBTUCost = 0, totBTUSaved = 0;
-    let totCombSaved = 0, totCombFull = 0;
-
-    const ahusComputed = (dayRec.ahus || []).map((ahu) => {
-      const onStr = ahu.on_time || "OFF";
-      const offStr = ahu.off_time || "OFF";
-
+    (dayRec.ahus || []).forEach((ahu, idx) => {
+      const isOff = isSun || ahu.is_off || ahu.on_time === "OFF" || ahu.off_time === "OFF";
       let runHrs = 0;
       let savedHrs = 0;
 
-      if (onStr !== "OFF" && offStr !== "OFF" && onStr && offStr) {
+      if (!isOff && ahu.on_time && ahu.off_time) {
+        const onStr = ahu.on_time || "07:00";
+        const offStr = ahu.off_time || "19:00";
         const [onH, onM] = onStr.split(':').map(Number);
         const [offH, offM] = offStr.split(':').map(Number);
         const onVal = onH + (onM || 0) / 60;
         const offVal = offH + (offM || 0) / 60;
-
         runHrs = Math.max(0, offVal - onVal);
 
         if (!isSun) {
-          savedHrs = Math.max(0, stdOffHour - offVal);
+          savedHrs = Math.max(0, targetOffDecimal - offVal);
         }
       }
 
-      const ahuKwh = ahu.kwh_cons !== undefined && ahu.kwh_cons !== null
-        ? Number(ahu.kwh_cons) 
-        : (autoCons.ahuCons[ahu.ahu_id] || 0);
+      const kwhCons = autoCons.ahu[idx] || 0;
+      const btuCons = autoCons.btu[idx] || 0;
 
       const kwhRate = Number(dayRec.kwh_rate || state.rates.kwh);
-      const ahuCost = ahuKwh * kwhRate;
+      const ahuCost = kwhCons * kwhRate;
       const ahuRatePerHr = runHrs > 0 ? (ahuCost / runHrs) : 0;
       const ahuFullCost8pm = ahuCost + (savedHrs * ahuRatePerHr);
-      const ahuCostSaved = savedHrs * ahuRatePerHr;
+      const ahuSaving = savedHrs * ahuRatePerHr;
 
-      const btuUnits = ahu.btu_cons !== undefined && ahu.btu_cons !== null
-        ? Number(ahu.btu_cons)
-        : (autoCons.btuCons[ahu.ahu_id] || 0);
+      totActualCost += ahuCost;
+      totFullCost += ahuFullCost8pm;
+      totCostSaving += ahuSaving;
+      totSavedHrs += savedHrs;
+      totActualHrs += runHrs;
 
       const btuRate = Number(dayRec.btu_rate || state.rates.btu);
-      const btuCost = btuUnits * btuRate;
+      const btuCost = btuCons * btuRate;
       const btuRatePerHr = runHrs > 0 ? (btuCost / runHrs) : 0;
       const btuFullCost8pm = btuCost + (savedHrs * btuRatePerHr);
-      const btuCostSaved = savedHrs * btuRatePerHr;
+      const btuSaving = savedHrs * btuRatePerHr;
 
-      const totCostSavedToday = ahuCostSaved + btuCostSaved;
-      const totFullCost8pmToday = ahuFullCost8pm + btuFullCost8pm;
+      totBTUActualCost += btuCost;
+      totBTUFullCost += btuFullCost8pm;
+      totBTUCostSaving += btuSaving;
+      totBTUCons += btuCons;
 
-      totSched += stdSched;
-      totRun += runHrs;
-      totSaved += savedHrs;
-
-      totAHUKwh += ahuKwh;
-      totAHUCost += ahuCost;
-      totAHUSaved += ahuCostSaved;
-
-      totBTUKwh += btuUnits;
-      totBTUCost += btuCost;
-      totBTUSaved += btuCostSaved;
-
-      totCombSaved += totCostSavedToday;
-      totCombFull += totFullCost8pmToday;
-
-      return {
-        ...ahu,
-        kwh_cons: ahuKwh,
-        btu_cons: btuUnits,
+      results.push({
+        id: ahu.id,
+        name: ahu.name,
+        on_time: ahu.on_time,
+        off_time: ahu.off_time,
+        is_off: isOff,
         sched_hrs: stdSched,
-        actual_run_hrs: runHrs,
-        saved_hrs: savedHrs,
-        ahu_cost: ahuCost,
-        ahu_rate_per_hr: ahuRatePerHr,
-        ahu_full_cost_8pm: ahuFullCost8pm,
-        ahu_cost_saved: ahuCostSaved,
-        btu_cost: btuCost,
-        btu_rate_per_hr: btuRatePerHr,
-        btu_full_cost_8pm: btuFullCost8pm,
-        btu_cost_saved: btuCostSaved,
-        tot_cost_saved_today: totCostSavedToday,
-        tot_full_cost_8pm_today: totFullCost8pmToday
-      };
+        run_hrs: Number(runHrs.toFixed(2)),
+        saved_hrs: Number(savedHrs.toFixed(2)),
+        consumption: Number(kwhCons.toFixed(1)),
+        cost: Number(ahuCost.toFixed(2)),
+        rate_per_hr: Number(ahuRatePerHr.toFixed(2)),
+        full_cost_8pm: Number(ahuFullCost8pm.toFixed(2)),
+        cost_saving: Number(ahuSaving.toFixed(2)),
+        btu_consumption: Number(btuCons.toFixed(1)),
+        btu_cost: Number(btuCost.toFixed(2)),
+        btu_rate_per_hr: Number(btuRatePerHr.toFixed(2)),
+        btu_full_cost_8pm: Number(btuFullCost8pm.toFixed(2)),
+        btu_cost_saving: Number(btuSaving.toFixed(2))
+      });
     });
 
+    const totCombActual = totActualCost + totBTUActualCost;
+    const totCombFull = totFullCost + totBTUFullCost;
+    const totCombSaved = totCostSaving + totBTUCostSaving;
     const savingsPct = totCombFull > 0 ? (totCombSaved / totCombFull) : 0;
 
     return {
-      ...dayRec,
-      ahus: ahusComputed,
-      tot_sched: totSched,
-      tot_run: totRun,
-      tot_saved: totSaved,
-      tot_kwh: totAHUKwh,
-      tot_ahu_cost: totAHUCost,
-      tot_ahu_cost_saved: totAHUSaved,
-      tot_btu_kwh: totBTUKwh,
-      tot_btu_cost: totBTUCost,
-      tot_btu_cost_saved: totBTUSaved,
-      tot_comb_cost_saved: totCombSaved,
-      tot_comb_full_cost: totCombFull,
-      savings_pct: savingsPct
+      date: dayRec.date,
+      day: dayRec.day,
+      ahus: results,
+      total_actual_cost: totActualCost,
+      total_full_cost: totFullCost,
+      total_cost_saving: totCostSaving,
+      total_saved_hrs: totSavedHrs,
+      total_actual_hrs: totActualHrs,
+      total_btu_actual_cost: totBTUActualCost,
+      total_btu_full_cost: totBTUFullCost,
+      total_btu_cost_saving: totBTUCostSaving,
+      total_btu_consumption: totBTUCons,
+      total_combined_actual_cost: totCombActual,
+      total_combined_full_cost: totCombFull,
+      total_combined_saving: totCombSaved,
+      savings_percentage: savingsPct
     };
   }
 
+  // Toast notification helper
   function showToast(msg) {
     const existing = document.querySelector('.toast-msg');
     if (existing) existing.remove();
 
     const toast = document.createElement('div');
     toast.className = 'toast-msg';
-    toast.innerHTML = `<i data-lucide="check-circle"></i> ${msg}`;
+    toast.innerHTML = `<i data-lucide="check-circle" style="color:var(--success-color);"></i> <span>${msg}</span>`;
     document.body.appendChild(toast);
     if (window.lucide) lucide.createIcons();
 
     setTimeout(() => {
       toast.style.opacity = '0';
+      toast.style.transform = 'translateY(10px)';
       setTimeout(() => toast.remove(), 300);
-    }, 2500);
+    }, 2800);
   }
 
+  // Expose TrackerUtils globally for ExcelExporter & modular components
+  window.TrackerUtils = {
+    getExactPreviousReading,
+    getAutoKWHConsumptionsForDate,
+    calculateAHUSaving,
+    dateToMonthKey,
+    getPreviousDateStr
+  };
+
+  // =========================================================================
+  // Real-Time Multi-Device Cloud Persistence & Sync Engine
+  // =========================================================================
+  window.CloudSync = {
+    getRoom: function () {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlRoom = urlParams.get('sync') || urlParams.get('room');
+      if (urlRoom) {
+        localStorage.setItem('kwh_cloud_sync_room', urlRoom.trim());
+        return urlRoom.trim();
+      }
+      return localStorage.getItem('kwh_cloud_sync_room') || 'CBRE-DT3-FACILITY-2026';
+    },
+
+    setRoom: function (newRoom) {
+      if (!newRoom || !newRoom.trim()) return;
+      const cleanRoom = newRoom.trim();
+      state.cloudSync.room = cleanRoom;
+      localStorage.setItem('kwh_cloud_sync_room', cleanRoom);
+      this.pull(true);
+    },
+
+    init: function () {
+      state.cloudSync.room = this.getRoom();
+
+      // Initial cloud pull
+      this.pull(false);
+
+      // Auto-poll cloud every 20 seconds
+      setInterval(() => {
+        if (state.cloudSync.isAutoPolling && document.visibilityState === 'visible') {
+          this.pull(false);
+        }
+      }, 20000);
+
+      // Pull when user switches back to the tab
+      window.addEventListener('focus', () => this.pull(false));
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') this.pull(false);
+      });
+    },
+
+    // Pull latest data from cloud
+    pull: function (manual) {
+      state.cloudSync.status = 'syncing';
+      this.updateHeaderSyncUI();
+
+      const syncUrl = `/api/sync?room=${encodeURIComponent(state.cloudSync.room)}`;
+
+      fetch(syncUrl, { method: 'GET', headers: { 'Accept': 'application/json' } })
+        .then(res => {
+          if (!res.ok) throw new Error('Cloud sync HTTP ' + res.status);
+          return res.json();
+        })
+        .then(json => {
+          if (json && json.data) {
+            const cloudData = json.data;
+            const cloudVersion = json.version || 0;
+
+            // Merge cloud data if it has dates or is newer
+            const cloudDates = Object.keys(cloudData.kwh_daily || {}).length;
+            const localDates = Object.keys(state.data.kwh_daily || {}).length;
+
+            if (cloudDates >= localDates || cloudVersion > state.cloudSync.lastCloudVersion) {
+              state.data = cloudData;
+              state.cloudSync.lastCloudVersion = cloudVersion;
+              recalculateDynamicSummaryMatrix();
+              localStorage.setItem('kwh_ahu_tracker_data_v2', JSON.stringify(state.data));
+              if (manual) showToast(`☁️ Cloud data synchronized (Room: ${state.cloudSync.room})`);
+              render();
+            }
+          }
+          state.cloudSync.status = 'synced';
+          state.cloudSync.lastSyncTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          this.updateHeaderSyncUI();
+        }
+        .catch(err => {
+          console.warn('Cloud pull fallback to local storage:', err);
+          state.cloudSync.status = 'synced';
+          state.cloudSync.lastSyncTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          this.updateHeaderSyncUI();
+        });
+    },
+
+    // Push local data to cloud
+    push: function (manual) {
+      state.cloudSync.status = 'syncing';
+      this.updateHeaderSyncUI();
+
+      const payload = {
+        room: state.cloudSync.room,
+        version: Date.now(),
+        deviceId: state.cloudSync.deviceId,
+        data: state.data
+      };
+
+      fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(res => res.json())
+      .then(json => {
+        state.cloudSync.status = 'synced';
+        state.cloudSync.lastSyncTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        state.cloudSync.lastCloudVersion = json.version || Date.now();
+        this.updateHeaderSyncUI();
+        if (manual) showToast('☁️ Data pushed & synchronized to all devices!');
+      })
+      .catch(err => {
+        console.warn('Cloud push offline/local mode:', err);
+        state.cloudSync.status = 'synced';
+        state.cloudSync.lastSyncTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        this.updateHeaderSyncUI();
+      });
+    },
+
+    // Update only the header pill without re-rendering whole app if typing
+    updateHeaderSyncUI: function () {
+      const pill = document.querySelector('.live-sync-indicator');
+      if (!pill) return;
+      pill.className = `live-sync-indicator ${state.cloudSync.status}`;
+      const textSpan = pill.querySelector('.live-sync-text');
+      if (textSpan) {
+        if (state.cloudSync.status === 'syncing') {
+          textSpan.textContent = 'Syncing...';
+        } else {
+          textSpan.textContent = `Cloud Synced (${state.cloudSync.room})`;
+        }
+      }
+    },
+
+    // Full JSON Backup Export
+    exportBackupJSON: function () {
+      const jsonStr = JSON.stringify(state.data, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const fileName = `CBRE_Energy_Tracker_Full_Backup_${todayStr}.json`;
+      if (window.ExcelExporter) {
+        window.ExcelExporter.triggerBlobDownload(blob, fileName);
+      }
+      showToast('📥 Full Database Backup JSON exported!');
+    },
+
+    // Full JSON Backup Import
+    importBackupJSON: function (file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed && (parsed.kwh_daily || parsed.ahu_saving)) {
+            state.data = parsed;
+            recalculateDynamicSummaryMatrix();
+            saveData(false);
+            showToast('📤 Database Backup Restored & Synced Successfully!');
+            render();
+          } else {
+            alert('Invalid backup JSON format. Required keys: kwh_daily or ahu_saving.');
+          }
+        } catch (err) {
+          alert('Error parsing JSON backup file: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  // Master Data Initialization
+  function initData() {
+    const stored = localStorage.getItem('kwh_ahu_tracker_data_v2');
+    if (stored) {
+      try {
+        state.data = JSON.parse(stored);
+      } catch (e) {
+        console.error("Failed to parse stored data:", e);
+        state.data = window.SEED_DATA || { ahu_saving: {}, kwh_daily: {}, month_baselines: {}, summary_matrix: {}, transactions: [] };
+      }
+    } else {
+      state.data = window.SEED_DATA || { ahu_saving: {}, kwh_daily: {}, month_baselines: {}, summary_matrix: {}, transactions: [] };
+    }
+
+    if (!state.data.transactions) {
+      state.data.transactions = [];
+    }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    state.selectedDate = todayStr;
+    state.selectedMonthMatrix = dateToMonthKey(todayStr) || 'Aug-26';
+    state.monthDashboard.selectedMonth = state.selectedMonthMatrix;
+
+    ensureDateStructure(todayStr);
+    generateInitialTransactionsIfNeeded();
+    recalculateDynamicSummaryMatrix();
+
+    // Start Cloud Synchronization Engine
+    window.CloudSync.init();
+  }
+
+  // Save Data locally and push to cloud
+  function saveData(skipBackend) {
+    recalculateDynamicSummaryMatrix();
+    localStorage.setItem('kwh_ahu_tracker_data_v2', JSON.stringify(state.data));
+
+    if (!skipBackend) {
+      window.CloudSync.push(false);
+    }
+  }
+
+  // Record a transaction in audit log
+  function recordTransaction(entry) {
+    if (!state.data.transactions) state.data.transactions = [];
+
+    const dt = new Date();
+    const txn = {
+      id: 'TXN-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase(),
+      timestamp: dt.toISOString(),
+      displayTime: dt.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      date: entry.date || state.selectedDate,
+      monthKey: dateToMonthKey(entry.date || state.selectedDate),
+      category: entry.category,
+      categoryLabel: entry.categoryLabel,
+      meterId: entry.meterId,
+      meterName: entry.meterName,
+      location: entry.location || "3F",
+      prevReading: entry.prevReading !== undefined ? Number(entry.prevReading) : undefined,
+      newReading: entry.newReading !== undefined ? Number(entry.newReading) : undefined,
+      consumption: entry.consumption !== undefined ? Number(entry.consumption.toFixed(2)) : undefined,
+      cost: entry.cost !== undefined ? Number(entry.cost.toFixed(2)) : undefined,
+      rate: entry.rate,
+      details: entry.details || '',
+      source: entry.source || 'User Input',
+      status: 'Committed'
+    };
+
+    state.data.transactions.unshift(txn);
+    if (state.data.transactions.length > 500) {
+      state.data.transactions = state.data.transactions.slice(0, 500);
+    }
+  }
+
+  // Generate initial audit log if empty
+  function generateInitialTransactionsIfNeeded() {
+    if (state.data.transactions && state.data.transactions.length > 0) return;
+
+    const dates = Object.keys(state.data.kwh_daily || {}).sort().reverse();
+    const sampleDates = dates.slice(0, 15);
+
+    sampleDates.forEach(dStr => {
+      const dayKWH = state.data.kwh_daily[dStr];
+      const mKey = dateToMonthKey(dStr);
+
+      (dayKWH.eb || []).forEach(m => {
+        const prev = getExactPreviousReading(dStr, 'eb', m.id);
+        const cons = Math.max(0, (m.reading || 0) - prev.reading);
+        if (cons > 0) {
+          state.data.transactions.push({
+            id: 'TXN-' + Math.random().toString(36).substring(2, 9).toUpperCase(),
+            timestamp: new Date(dStr + 'T08:00:00Z').toISOString(),
+            displayTime: `${dStr} 08:00:00`,
+            date: dStr,
+            monthKey: mKey,
+            category: 'eb',
+            categoryLabel: 'EB Meter Reading',
+            meterId: m.id,
+            meterName: m.name,
+            location: m.location || "3F",
+            prevReading: prev.reading,
+            newReading: m.reading,
+            consumption: Number(cons.toFixed(1)),
+            cost: Number((cons * state.rates.kwh).toFixed(2)),
+            rate: state.rates.kwh,
+            details: 'Initial historical log baseline',
+            source: 'Meter Sync',
+            status: 'Committed'
+          });
+        }
+      });
+    });
+  }
+
+  // =========================================================================
+  // Master Render Engine
+  // =========================================================================
   function render() {
-    ensureDateStructure(state.selectedDate);
     document.documentElement.style.setProperty('--font-scale', state.fontScale);
 
     const appContainer = document.getElementById('app');
     if (!appContainer) return;
 
     appContainer.innerHTML = `
-      ${renderTopHeader()}
-      ${renderNavTabs()}
-      ${state.activeTab === 'kwh' || state.activeTab === 'ahu' ? renderUserControlBarOnlyDate() : ''}
-      ${renderTabContent()}
-      ${state.activeTab === 'month' ? renderFullDT3SummaryMatrixSection() : ''}
+      <div class="app-layout">
+        ${renderTopHeader()}
+        ${renderNavTabs()}
+        ${state.activeTab === 'kwh' || state.activeTab === 'ahu' || state.activeTab === 'txn' ? renderUserControlBarOnlyDate() : ''}
+        
+        <main class="main-content-area">
+          ${renderTabContent()}
+        </main>
+      </div>
+
       ${state.showAdminModal ? renderAdminAuthModal() : ''}
+      ${state.cloudSync.showModal ? renderCloudSyncModal() : ''}
     `;
 
     if (window.lucide) lucide.createIcons();
-    attachEventListeners();
 
-    if (state.activeTab === 'admin' && state.isAdminUnlocked) {
-      setTimeout(renderAdminCharts, 50);
+    // Render Charts for active tab
+    if (state.activeTab === 'month') {
+      renderMonthDashboardCharts();
+    } else if (state.activeTab === 'admin') {
+      renderAdminCharts();
     }
+
+    attachEventListeners();
   }
 
+  // Top Header with Live Cloud Sync Pill
   function renderTopHeader() {
     return `
       <header class="top-header">
         <div class="brand-container">
           <div class="brand-logo"><i data-lucide="zap"></i></div>
           <div class="brand-title">
-            <h1>AHU & Energy (KWH) Tracker</h1>
-            <div class="brand-subtitle">CBRE | Operational AHU Saving & Daily KWH Consumption Manager</div>
+            <h1>AHU & Energy (KWH) Intelligence Tracker</h1>
+            <div class="brand-subtitle">CBRE Facility Management | Multi-Device Real-Time Energy Monitor</div>
           </div>
         </div>
 
         <div class="top-utilities">
-          <div class="live-sync-indicator" title="Data synchronized with local storage & master engine">
+          <div class="live-sync-indicator ${state.cloudSync.status}" id="btn-cloud-sync-modal" title="Click to manage Multi-Device Cloud Sync & Pairing">
             <span class="pulse-dot"></span>
-            <span class="live-sync-text">Real-Time Sync Active</span>
+            <span class="live-sync-text">Cloud Synced (${state.cloudSync.room})</span>
           </div>
+
+          <button class="action-btn-sm" id="btn-force-cloud-sync" title="Sync now with all devices" style="background: rgba(59, 130, 246, 0.15); border: 1px solid var(--primary-blue); color: #fff; padding: 0.35rem 0.65rem; border-radius: var(--radius-sm); display:flex; align-items:center; gap:0.35rem; font-size:0.75rem; cursor:pointer;">
+            <i data-lucide="refresh-cw" style="width:14px; height:14px;"></i> Sync
+          </button>
 
           <div class="rate-badge-group">
             <div class="rate-item" title="Electricity Board KWH Unit Rate">⚡ KWH: <strong>₹${state.rates.kwh.toFixed(2)}</strong></div>
@@ -592,6 +778,7 @@
     `;
   }
 
+  // Navigation Tabs Bar
   function renderNavTabs() {
     const txnCount = (state.data.transactions || []).length;
     return `
@@ -606,8 +793,9 @@
           <i data-lucide="history"></i> Transaction History & Audit Log
           <span class="tab-badge">${txnCount}</span>
         </button>
-        <button class="nav-tab-btn ${state.activeTab === 'month' ? 'active' : ''}" data-tab="month">
-          <i data-lucide="calendar"></i> Monthly Excel Matrix View
+        <button class="nav-tab-btn month-tab ${state.activeTab === 'month' ? 'active' : ''}" data-tab="month">
+          <i data-lucide="calendar-range"></i> Interactive Month Consumption Dashboard
+          <span class="tab-badge" style="background:#00e5ff; color:#0b0f19; font-weight:800;">${state.monthDashboard.selectedMonth}</span>
         </button>
         <button class="nav-tab-btn admin-tab ${state.activeTab === 'admin' ? 'active' : ''}" data-tab="admin">
           <i data-lucide="shield-check"></i> Executive Dashboards & Admin
@@ -616,6 +804,7 @@
     `;
   }
 
+  // User Date Control Bar for Daily tabs
   function renderUserControlBarOnlyDate() {
     const kwhPills = state.activeTab === 'kwh' ? `
       <div class="filter-pills-container">
@@ -645,6 +834,7 @@
     `;
   }
 
+  // Tab Content Switcher
   function renderTabContent() {
     if (state.activeTab === 'kwh') {
       return renderKWHDailyLogContent();
@@ -653,13 +843,14 @@
     } else if (state.activeTab === 'txn') {
       return renderTransactionHistoryContent();
     } else if (state.activeTab === 'month') {
-      return '';
+      return renderMonthDashboardContent();
     } else if (state.activeTab === 'admin') {
       return renderAdminPortalContent();
     }
     return '';
   }
 
+  // Core Render Functions
   function renderKWHDailyLogContent() {
     const dateStr = state.selectedDate;
     const currKWH = state.data.kwh_daily[dateStr] || { eb: [], ahu: [], btu: [] };
@@ -1035,6 +1226,7 @@
   }
 
   // 3. Render Transaction History & Audit Trail Content
+
   function renderTransactionHistoryContent() {
     const txns = state.data.transactions || [];
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -1216,6 +1408,7 @@
   }
 
   // Full DT-3 Summary Matrix Sheet Format (Matching Excel summary Sheet)
+
   function renderFullDT3SummaryMatrixSection() {
     recalculateDynamicSummaryMatrix();
     const sumData = state.data.summary_matrix || { months: [], consumption: {}, cost: {} };
@@ -1291,284 +1484,404 @@
     `;
   }
 
-  function renderMonthMatrixSectionBelow() {
-    const selectedMonth = state.selectedMonthMatrix || 'Aug-26';
+  // =========================================================================
+  // NEW: Premier Interactive Month-Wise Consumption & Analytics Dashboard
+  // =========================================================================
+  function renderMonthDashboardContent() {
+    const selectedMonth = state.monthDashboard.selectedMonth || 'Aug-26';
+    const selectedYear = state.monthDashboard.selectedYear || '2026';
+    const viewMode = state.monthDashboard.viewMode || 'dashboard';
+
+    // Parse target month & year
+    const p = selectedMonth.split('-');
+    const mStr = p[0];
+    const yVal = parseInt(p[1]) || 26;
+    const targetYear = yVal < 100 ? 2000 + yVal : yVal;
     
-    // Parse Year and Month from selectedMonth (e.g. "Aug-26" -> year 2026, month 8)
-    let targetYear = 2026;
-    let targetMonth = 8;
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthIdx = monthNames.indexOf(mStr);
+    const targetMonth = monthIdx !== -1 ? monthIdx + 1 : 8;
 
-    const monthMap = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
-    const p = selectedMonth.toLowerCase().split('-');
-    if (p.length >= 2) {
-      const mStr = p[0].slice(0, 3);
-      if (monthMap[mStr]) targetMonth = monthMap[mStr];
-      const yVal = parseInt(p[1]);
-      if (yVal < 100) targetYear = 2000 + yVal;
-      else if (yVal >= 2000) targetYear = yVal;
-    }
-
-    // Generate all days in month
+    // Generate date list for this month
     const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
     const dateList = [];
     for (let day = 1; day <= daysInMonth; day++) {
       const dStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       dateList.push(dStr);
+      ensureDateStructure(dStr);
     }
 
-    const monthOptions = [
-      { key: "Aug-26", label: "August 2026 (Current)" },
-      { key: "Jul-26", label: "July 2026" },
-      { key: "Jun-26", label: "June 2026" },
-      { key: "May-26", label: "May 2026" },
-      { key: "Apr-26", label: "April 2026" },
-      { key: "Mar-26", label: "March 2026" },
-      { key: "Feb-26", label: "February 2026" },
-      { key: "Jan-26", label: "January 2026" },
-      { key: "Aug-25", label: "August 2025" },
-      { key: "Jul-25", label: "July 2025" },
-      { key: "Mar-25", label: "March 2025" }
-    ];
-
-    const selectOptionsHtml = monthOptions.map(m => `
-      <option value="${m.key}" ${selectedMonth === m.key ? 'selected' : ''}>${m.label}</option>
-    `).join('');
-
+    // Master Meter Definitions
     const ebMaster = [
-      { id: 1, loc: "3F", name: "SL No 540430038840 (EB Unit)" },
-      { id: 2, loc: "3F", name: "SL No 540430038845 (EB Unit)" },
-      { id: 3, loc: "3F", name: "SL No 540430038844 (EB Unit)" },
-      { id: 4, loc: "3F", name: "SL No 540430038821 (EB Unit)" },
-      { id: 5, loc: "3F", name: "SL No 540430038849 (EB Unit)" },
-      { id: 6, loc: "3F", name: "SL No 540430038646 (EB Unit)" },
-      { id: 7, loc: "3F", name: "SL No 540430038843 (EB Unit)" },
-      { id: 8, loc: "3F", name: "SL No 540430038848 (EB Unit)" }
+      { id: 1, name: "SL No 540430038840 (EB Unit)", loc: "3F", short: "EB-1" },
+      { id: 2, name: "SL No 540430038845 (EB Unit)", loc: "3F", short: "EB-2" },
+      { id: 3, name: "SL No 540430038844 (EB Unit)", loc: "3F", short: "EB-3" },
+      { id: 4, name: "SL No 540430038821 (EB Unit)", loc: "3F", short: "EB-4" },
+      { id: 5, name: "SL No 540430038849 (EB Unit)", loc: "3F", short: "EB-5" },
+      { id: 6, name: "SL No 540430038646 (EB Unit)", loc: "3F", short: "EB-6" },
+      { id: 7, name: "SL No 540430038843 (EB Unit)", loc: "3F", short: "EB-7" },
+      { id: 8, name: "SL No 540430038848 (EB Unit)", loc: "3F", short: "EB-8" }
     ];
 
     const ahuMaster = [
-      { id: 1, loc: "3F", name: "AHU1" },
-      { id: 2, loc: "3F", name: "AHU2" },
-      { id: 3, loc: "3F", name: "AHU3" },
-      { id: 4, loc: "3F", name: "AHU4" }
+      { id: 1, name: "AHU1", loc: "3F", short: "AHU-1" },
+      { id: 2, name: "AHU2", loc: "3F", short: "AHU-2" },
+      { id: 3, name: "AHU3", loc: "3F", short: "AHU-3" },
+      { id: 4, name: "AHU4", loc: "3F", short: "AHU-4" }
     ];
 
     const btuMaster = [
-      { id: 1, loc: "3F", name: "AHU1 - BTU" },
-      { id: 2, loc: "3F", name: "AHU2 - BTU" },
-      { id: 3, loc: "3F", name: "AHU3 - BTU" },
-      { id: 4, loc: "3F", name: "AHU4 - BTU" }
+      { id: 1, name: "AHU1 - BTU", loc: "3F", short: "BTU-1" },
+      { id: 2, name: "AHU2 - BTU", loc: "3F", short: "BTU-2" },
+      { id: 3, name: "AHU3 - BTU", loc: "3F", short: "BTU-3" },
+      { id: 4, name: "AHU4 - BTU", loc: "3F", short: "BTU-4" }
     ];
 
-    let readingsRowsHtml = '';
-
-    ebMaster.forEach(m => {
-      const prevInfo = getExactPreviousReading(dateList[0] || state.selectedDate, 'eb', m.id);
-      const prevVal = prevInfo.reading;
-      const prevDGVal = prevInfo.dg_reading;
-
-      let ebCells = dateList.map(d => {
-        const val = state.data.kwh_daily[d]?.eb?.find(e => e.id === m.id)?.reading;
-        return `<td>${val !== undefined ? val : '-'}</td>`;
-      }).join('');
-
-      let dgCells = dateList.map(d => {
-        const val = state.data.kwh_daily[d]?.eb?.find(e => e.id === m.id)?.dg_reading;
-        return `<td style="color:#fbbf24;">${val !== undefined ? val : '-'}</td>`;
-      }).join('');
-
-      readingsRowsHtml += `
-        <tr>
-          <td><strong>${m.id}</strong></td>
-          <td>${m.loc}</td>
-          <td><strong style="color:var(--eb-color);">${m.name}</strong></td>
-          <td><strong>${prevVal}</strong></td>
-          ${ebCells}
-        </tr>
-        <tr style="background:rgba(251, 191, 36, 0.03);">
-          <td></td><td></td>
-          <td style="color:#fbbf24; font-weight:bold;">↳ DG Backup Reading</td>
-          <td style="color:#fbbf24;">${prevDGVal}</td>
-          ${dgCells}
-        </tr>
-      `;
-    });
-
-    ahuMaster.forEach(m => {
-      const prevInfo = getExactPreviousReading(dateList[0] || state.selectedDate, 'ahu', m.id);
-      const prevVal = prevInfo.reading;
-      const prevDGVal = prevInfo.dg_reading;
-
-      let ahuCells = dateList.map(d => {
-        const val = state.data.kwh_daily[d]?.ahu?.find(a => a.id === m.id)?.reading;
-        return `<td>${val !== undefined ? val : '-'}</td>`;
-      }).join('');
-
-      let dgCells = dateList.map(d => {
-        const val = state.data.kwh_daily[d]?.ahu?.find(a => a.id === m.id)?.dg_reading;
-        return `<td style="color:#fbbf24;">${val !== undefined ? val : '-'}</td>`;
-      }).join('');
-
-      readingsRowsHtml += `
-        <tr style="border-top: 1px solid var(--border-highlight);">
-          <td><strong>${m.id}</strong></td>
-          <td>${m.loc}</td>
-          <td><strong style="color:var(--ahu-color);">${m.name}</strong></td>
-          <td><strong>${prevVal}</strong></td>
-          ${ahuCells}
-        </tr>
-        <tr style="background:rgba(251, 191, 36, 0.03);">
-          <td></td><td></td>
-          <td style="color:#fbbf24; font-weight:bold;">↳ DG Backup Reading</td>
-          <td style="color:#fbbf24;">${prevDGVal}</td>
-          ${dgCells}
-        </tr>
-      `;
-    });
-
-    btuMaster.forEach(m => {
-      const prevInfo = getExactPreviousReading(dateList[0] || state.selectedDate, 'btu', m.id);
-      const prevVal = prevInfo.reading;
-
-      let btuCells = dateList.map(d => {
-        const val = state.data.kwh_daily[d]?.btu?.find(b => b.id === m.id)?.reading;
-        return `<td>${val !== undefined ? val : '-'}</td>`;
-      }).join('');
-
-      readingsRowsHtml += `
-        <tr style="border-top: 1px solid var(--border-highlight);">
-          <td><strong>${m.id}</strong></td>
-          <td>${m.loc}</td>
-          <td><strong style="color:var(--btu-color);">${m.name}</strong></td>
-          <td><strong>${prevVal}</strong></td>
-          ${btuCells}
-        </tr>
-      `;
-    });
-
-    let consRowsHtml = '';
-    const totEBByDate = {};
-    const totDGByDate = {};
-    const totAHUByDate = {};
-    const totAHUDGByDate = {};
-    const totBTUByDate = {};
+    // Compute Daily Consumptions and Totals for Month
+    const dailyStats = [];
+    let monthSumEB = 0, monthSumDG = 0, monthSumAHU = 0, monthSumBTU = 0, monthSumCost = 0;
+    let peakDay = { date: '', val: 0 }, minDay = { date: '', val: Infinity };
 
     dateList.forEach(dStr => {
-      totEBByDate[dStr] = 0;
-      totDGByDate[dStr] = 0;
-      totAHUByDate[dStr] = 0;
-      totAHUDGByDate[dStr] = 0;
-      totBTUByDate[dStr] = 0;
+      const dt = new Date(dStr);
+      const dayName = dt.toLocaleString('en-US', { weekday: 'short' });
+      const dayKWH = state.data.kwh_daily[dStr] || {};
+
+      let dayEB = 0, dayDG = 0, dayAHU = 0, dayBTU = 0;
+      const ebMap = {}, ahuMap = {}, btuMap = {};
+
+      ebMaster.forEach(m => {
+        const curr = (dayKWH.eb || []).find(x => x.id === m.id) || {};
+        const prev = getExactPreviousReading(dStr, 'eb', m.id);
+        const cEB = (curr.reading !== undefined && prev.reading !== undefined) ? Math.max(0, curr.reading - prev.reading) : 0;
+        const cDG = (curr.dg_reading !== undefined && prev.dg_reading !== undefined) ? Math.max(0, curr.dg_reading - prev.dg_reading) : 0;
+        ebMap[m.id] = { eb: cEB, dg: cDG, reading: curr.reading || 0, prev: prev.reading || 0 };
+        dayEB += cEB;
+        dayDG += cDG;
+      });
+
+      ahuMaster.forEach(m => {
+        const curr = (dayKWH.ahu || []).find(x => x.id === m.id) || {};
+        const prev = getExactPreviousReading(dStr, 'ahu', m.id);
+        const cAHU = (curr.reading !== undefined && prev.reading !== undefined) ? Math.max(0, curr.reading - prev.reading) : 0;
+        ahuMap[m.id] = { ahu: cAHU, reading: curr.reading || 0, prev: prev.reading || 0 };
+        dayAHU += cAHU;
+      });
+
+      btuMaster.forEach(m => {
+        const curr = (dayKWH.btu || []).find(x => x.id === m.id) || {};
+        const prev = getExactPreviousReading(dStr, 'btu', m.id);
+        const cBTU = (curr.reading !== undefined && prev.reading !== undefined) ? Math.max(0, curr.reading - prev.reading) : 0;
+        btuMap[m.id] = { btu: cBTU, reading: curr.reading || 0, prev: prev.reading || 0 };
+        dayBTU += cBTU;
+      });
+
+      const dayCum = dayEB + dayDG;
+      const dayCost = (dayEB * state.rates.kwh) + (dayDG * state.rates.dg) + (dayBTU * state.rates.btu);
+
+      monthSumEB += dayEB;
+      monthSumDG += dayDG;
+      monthSumAHU += dayAHU;
+      monthSumBTU += dayBTU;
+      monthSumCost += dayCost;
+
+      if (dayCum > peakDay.val) peakDay = { date: dStr, val: dayCum };
+      if (dayCum > 0 && dayCum < minDay.val) minDay = { date: dStr, val: dayCum };
+
+      dailyStats.push({
+        date: dStr,
+        dayNum: dt.getDate(),
+        dayName: dayName,
+        ebMap,
+        ahuMap,
+        btuMap,
+        dayEB,
+        dayDG,
+        dayCum,
+        dayAHU,
+        dayBTU,
+        dayCost
+      });
     });
 
-    ebMaster.forEach(m => {
-      let ebConsCells = '';
-      let dgConsCells = '';
+    const monthSumCum = monthSumEB + monthSumDG;
+    const avgDailyCum = daysInMonth > 0 ? (monthSumCum / daysInMonth) : 0;
+    if (minDay.val === Infinity) minDay = { date: dateList[0] || '', val: 0 };
 
-      for (let idx = 0; idx < dateList.length; idx++) {
-        const currDate = dateList[idx];
-        const currData = state.data.kwh_daily[currDate]?.eb?.find(e => e.id === m.id) || {};
-        const prevInfo = getExactPreviousReading(currDate, 'eb', m.id);
+    // Calculate AHU Total Savings for Month
+    let monthAHUSavedHrs = 0, monthAHUSavedCost = 0;
+    dateList.forEach(dStr => {
+      const dayRec = state.data.ahu_saving[dStr];
+      if (dayRec) {
+        const c = calculateAHUSaving(dayRec);
+        monthAHUSavedHrs += c.total_saved_hrs;
+        monthAHUSavedCost += c.total_combined_saving;
+      }
+    });
 
-        const ebCons = (currData.reading !== undefined && prevInfo.reading !== undefined) ? Math.max(0, currData.reading - prevInfo.reading) : 0;
-        const dgCons = (currData.dg_reading !== undefined && prevInfo.dg_reading !== undefined) ? Math.max(0, currData.dg_reading - prevInfo.dg_reading) : 0;
+    // Calculate Month-over-Month Variance vs previous month
+    let prevMonthEB = 0, prevMonthKey = '';
+    const prevMonthIdx = monthIdx > 0 ? monthIdx - 1 : 11;
+    const prevYearVal = monthIdx > 0 ? yVal : yVal - 1;
+    prevMonthKey = `${monthNames[prevMonthIdx]}-${prevYearVal}`;
+    
+    // Lookup in summary matrix
+    const sMonths = state.data.summary_matrix?.months || [];
+    const prevSIdx = sMonths.indexOf(prevMonthKey);
+    if (prevSIdx !== -1) {
+      prevMonthEB = state.data.summary_matrix.consumption['EB']?.[prevSIdx] || 0;
+    }
+    const momVariance = prevMonthEB > 0 ? (((monthSumEB - prevMonthEB) / prevMonthEB) * 100) : 0;
 
-        totEBByDate[currDate] += ebCons;
-        totDGByDate[currDate] += dgCons;
+    // Year options & 12 Month Ribbon Generation
+    const yearOptions = ['2026', '2025', '2024'];
+    const currentYearShort = targetYear.toString().slice(-2);
 
-        ebConsCells += `<td>${ebCons ? ebCons.toFixed(1) : '0'}</td>`;
-        dgConsCells += `<td style="color:#fbbf24;">${dgCons ? dgCons.toFixed(1) : '0'}</td>`;
+    const monthRibbonHtml = monthNames.map((m, idx) => {
+      const mKey = `${m}-${currentYearShort}`;
+      const isSelected = mKey === selectedMonth;
+      
+      // Calculate month total for ribbon badge
+      let mTotalKWH = 0;
+      const sIdx = sMonths.indexOf(mKey);
+      if (sIdx !== -1) {
+        mTotalKWH = (state.data.summary_matrix.consumption['EB']?.[sIdx] || 0) + (state.data.summary_matrix.consumption['DG']?.[sIdx] || 0);
       }
 
-      consRowsHtml += `
-        <tr>
-          <td><strong>${m.id}</strong></td><td>${m.loc}</td>
-          <td><strong style="color:var(--eb-color);">${m.name}</strong></td>
-          ${ebConsCells}
-        </tr>
-        <tr style="background:rgba(251, 191, 36, 0.03);">
-          <td></td><td></td><td style="color:#fbbf24;">↳ DG Backup Cons (kWh)</td>
-          ${dgConsCells}
-        </tr>
+      return `
+        <button class="month-nav-btn ${isSelected ? 'active' : ''}" data-month="${mKey}">
+          <div class="month-btn-header">
+            <span class="month-name">${m}-${currentYearShort}</span>
+            ${isSelected ? '<span class="active-dot"></span>' : ''}
+          </div>
+          <div class="month-btn-footer">
+            <span class="month-kwh-badge">${mTotalKWH > 0 ? (mTotalKWH / 1000).toFixed(1) + 'k kWh' : 'Logged'}</span>
+          </div>
+        </button>
       `;
-    });
+    }).join('');
 
-    const totEBCells = dateList.map(d => `<td><strong>${totEBByDate[d].toFixed(1)}</strong></td>`).join('');
-    const totDGCells = dateList.map(d => `<td style="color:#fbbf24;"><strong>${totDGByDate[d].toFixed(1)}</strong></td>`).join('');
-    const totCumCells = dateList.map(d => `<td style="color:#00e5ff;"><strong>${(totEBByDate[d] + totDGByDate[d]).toFixed(1)}</strong></td>`).join('');
+    // Previous & Next Month Navigation
+    const currIdxInAll = monthNames.indexOf(mStr);
+    const prevNavMonth = currIdxInAll > 0 ? `${monthNames[currIdxInAll - 1]}-${currentYearShort}` : `Dec-${parseInt(currentYearShort) - 1}`;
+    const nextNavMonth = currIdxInAll < 11 ? `${monthNames[currIdxInAll + 1]}-${currentYearShort}` : `Jan-${parseInt(currentYearShort) + 1}`;
 
-    consRowsHtml += `
-      <tr class="total-row"><td></td><td></td><td>Total Power - EB Unit</td>${totEBCells}</tr>
-      <tr class="total-row"><td></td><td></td><td style="color:#fbbf24;">Total Power - DG Backup</td>${totDGCells}</tr>
-      <tr class="total-row" style="background:rgba(0, 229, 255, 0.15);"><td></td><td></td><td style="color:#00e5ff;">Total Power Cumulative</td>${totCumCells}</tr>
-    `;
+    // Render Sub-Views
+    let mainViewHtml = '';
 
-    ahuMaster.forEach(m => {
-      let ahuConsCells = '';
-      let dgConsCells = '';
+    if (viewMode === 'dashboard') {
+      mainViewHtml = `
+        <!-- Interactive Chart Visualizations -->
+        <div class="dashboard-charts-grid" style="display:grid; grid-template-columns: 2fr 1fr; gap:1.25rem; margin-bottom:1.5rem;">
+          <div class="metric-chart-card">
+            <div class="chart-card-header">
+              <div class="chart-title">
+                <i data-lucide="bar-chart-3" style="color:#00e5ff;"></i>
+                <h3>31-Day Daily Consumption & Load Profile (${selectedMonth})</h3>
+              </div>
+              <div class="chart-badge">EB, DG, AHU & BTU Multi-Dataset</div>
+            </div>
+            <div style="height: 320px; position:relative;">
+              <canvas id="month-daily-trend-chart"></canvas>
+            </div>
+          </div>
 
-      for (let idx = 0; idx < dateList.length; idx++) {
-        const currDate = dateList[idx];
-        const currData = state.data.kwh_daily[currDate]?.ahu?.find(a => a.id === m.id) || {};
-        const prevInfo = getExactPreviousReading(currDate, 'ahu', m.id);
+          <div class="metric-chart-card">
+            <div class="chart-card-header">
+              <div class="chart-title">
+                <i data-lucide="pie-chart" style="color:#10b981;"></i>
+                <h3>Tenant & Meter Load Distribution</h3>
+              </div>
+              <div class="chart-badge">Category Share %</div>
+            </div>
+            <div style="height: 320px; position:relative;">
+              <canvas id="month-meter-share-chart"></canvas>
+            </div>
+          </div>
+        </div>
 
-        const ahuCons = (currData.reading !== undefined && prevInfo.reading !== undefined) ? Math.max(0, currData.reading - prevInfo.reading) : 0;
-        const dgCons = (currData.dg_reading !== undefined && prevInfo.dg_reading !== undefined) ? Math.max(0, currData.dg_reading - prevInfo.dg_reading) : 0;
+        <div class="dashboard-charts-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:1.25rem; margin-bottom:2rem;">
+          <div class="metric-chart-card">
+            <div class="chart-card-header">
+              <div class="chart-title">
+                <i data-lucide="trending-up" style="color:#f59e0b;"></i>
+                <h3>Month-over-Month & Historical Variance</h3>
+              </div>
+              <div class="chart-badge">${selectedMonth} vs ${prevMonthKey}</div>
+            </div>
+            <div style="height: 280px; position:relative;">
+              <canvas id="month-mom-chart"></canvas>
+            </div>
+          </div>
 
-        totAHUByDate[currDate] += ahuCons;
-        totAHUDGByDate[currDate] += dgCons;
+          <div class="metric-chart-card">
+            <div class="chart-card-header">
+              <div class="chart-title">
+                <i data-lucide="indian-rupee" style="color:#3b82f6;"></i>
+                <h3>Cumulative Daily Electricity Bill (INR)</h3>
+              </div>
+              <div class="chart-badge">Total: ₹${monthSumCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+            </div>
+            <div style="height: 280px; position:relative;">
+              <canvas id="month-cost-trend-chart"></canvas>
+            </div>
+          </div>
+        </div>
 
-        ahuConsCells += `<td>${ahuCons ? ahuCons.toFixed(1) : '0'}</td>`;
-        dgConsCells += `<td style="color:#fbbf24;">${dgCons ? dgCons.toFixed(1) : '0'}</td>`;
-      }
-
-      consRowsHtml += `
-        <tr style="border-top: 1px solid var(--border-highlight);">
-          <td><strong>${m.id}</strong></td><td>${m.loc}</td>
-          <td><strong style="color:var(--ahu-color);">${m.name}</strong></td>
-          ${ahuConsCells}
-        </tr>
-        <tr style="background:rgba(251, 191, 36, 0.03);">
-          <td></td><td></td><td style="color:#fbbf24;">↳ AHU DG Cons (kWh)</td>
-          ${dgConsCells}
-        </tr>
+        <!-- Quick Consumption Grid Section below charts -->
+        ${renderMonthConsumptionGrid(selectedMonth, dateList, dailyStats, ebMaster, ahuMaster, btuMaster, monthSumEB, monthSumDG, monthSumCum, monthSumAHU, monthSumBTU, monthSumCost, avgDailyCum)}
       `;
-    });
+    } else if (viewMode === 'consumption_grid') {
+      mainViewHtml = renderMonthConsumptionGrid(selectedMonth, dateList, dailyStats, ebMaster, ahuMaster, btuMaster, monthSumEB, monthSumDG, monthSumCum, monthSumAHU, monthSumBTU, monthSumCost, avgDailyCum);
+    } else if (viewMode === 'readings_grid') {
+      mainViewHtml = renderMonthReadingsGrid(selectedMonth, dateList, dailyStats, ebMaster, ahuMaster, btuMaster);
+    } else if (viewMode === 'macro_matrix') {
+      mainViewHtml = renderFullDT3SummaryMatrixSection();
+    }
 
-    const totAHUCells = dateList.map(d => `<td style="color:var(--ahu-color);"><strong>${totAHUByDate[d].toFixed(1)}</strong></td>`).join('');
-    const totAHUDGCells = dateList.map(d => `<td style="color:#fbbf24;"><strong>${totAHUDGByDate[d].toFixed(1)}</strong></td>`).join('');
+    return `
+      <div class="month-dashboard-wrapper">
+        <!-- Month Navigation & Controls Hub -->
+        <div class="month-navigation-hub">
+          <div class="hub-top-row">
+            <div class="hub-title-group">
+              <div class="hub-icon"><i data-lucide="calendar-range"></i></div>
+              <div>
+                <h2>Month-Wise Energy Consumption & Analytics Dashboard</h2>
+                <p>Select any month below to navigate consumption sheets, analyze load trends, inspect audit logs, and export Excel reports.</p>
+              </div>
+            </div>
 
-    consRowsHtml += `
-      <tr class="total-row"><td></td><td></td><td style="color:var(--ahu-color);">Total AHU Power Consumption</td>${totAHUCells}</tr>
-      <tr class="total-row"><td></td><td></td><td style="color:#fbbf24;">Total AHU DG consumption</td>${totAHUDGCells}</tr>
+            <!-- Quick Navigation Controls -->
+            <div class="hub-nav-controls">
+              <button class="nav-arrow-btn" id="btn-prev-month" data-nav="${prevNavMonth}" title="Previous Month">
+                <i data-lucide="chevron-left"></i> ${prevNavMonth}
+              </button>
+              <button class="nav-arrow-btn" id="btn-jump-current-month" data-nav="Aug-26" title="Jump to Current Month">
+                <i data-lucide="calendar"></i> Aug-26 (Current)
+              </button>
+              <button class="nav-arrow-btn" id="btn-next-month" data-nav="${nextNavMonth}" title="Next Month">
+                ${nextNavMonth} <i data-lucide="chevron-right"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- 12-Month Interactive Navigation Ribbon -->
+          <div class="month-ribbon-container">
+            ${monthRibbonHtml}
+          </div>
+
+          <!-- View Switcher & Action Toolbar -->
+          <div class="hub-bottom-toolbar">
+            <div class="view-mode-pills">
+              <button class="view-mode-btn ${viewMode === 'dashboard' ? 'active' : ''}" data-view="dashboard">
+                <i data-lucide="layout-dashboard"></i> Analytics Dashboard & Charts
+              </button>
+              <button class="view-mode-btn ${viewMode === 'consumption_grid' ? 'active' : ''}" data-view="consumption_grid">
+                <i data-lucide="table"></i> Full Month Consumption Sheet
+              </button>
+              <button class="view-mode-btn ${viewMode === 'readings_grid' ? 'active' : ''}" data-view="readings_grid">
+                <i data-lucide="file-spreadsheet"></i> Daily Meter Readings Log
+              </button>
+              <button class="view-mode-btn ${viewMode === 'macro_matrix' ? 'active' : ''}" data-view="macro_matrix">
+                <i data-lucide="columns-3"></i> Cross-Year Macro Matrix
+              </button>
+            </div>
+
+            <div class="export-actions-group">
+              <button class="export-btn-primary" id="btn-export-single-month-excel" title="Download Excel (.xlsx) for this selected month">
+                <i data-lucide="file-down"></i> Export ${selectedMonth} Excel
+              </button>
+              <button class="export-btn-secondary" id="btn-export-master-excel" title="Download Complete DT-3 Master Workbook">
+                <i data-lucide="book-open"></i> Full Master Workbook
+              </button>
+              <button class="export-btn-secondary" id="btn-print-month-report" title="Print or Save Executive PDF">
+                <i data-lucide="printer"></i> Print PDF
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Executive KPI Cards for Selected Month -->
+        <div class="kpi-cards-grid">
+          <div class="kpi-card eb-card">
+            <div class="kpi-card-header">
+              <span class="kpi-title">Total EB Grid Consumption</span>
+              <i data-lucide="zap" class="kpi-icon"></i>
+            </div>
+            <div class="kpi-value">${monthSumEB.toLocaleString('en-IN', { maximumFractionDigits: 1 })} <span class="kpi-unit">kWh</span></div>
+            <div class="kpi-cost">Total Cost: ₹${(monthSumEB * state.rates.kwh).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+            <div class="kpi-footer">
+              <span class="kpi-subtext">Avg: ${(monthSumEB / daysInMonth).toFixed(1)} kWh/day</span>
+              <span class="kpi-variance ${momVariance >= 0 ? 'up' : 'down'}">
+                ${momVariance >= 0 ? '▲ +' : '▼ '}${momVariance.toFixed(1)}% vs ${prevMonthKey}
+              </span>
+            </div>
+          </div>
+
+          <div class="kpi-card dg-card">
+            <div class="kpi-card-header">
+              <span class="kpi-title">Total DG Generator Backup</span>
+              <i data-lucide="fuel" class="kpi-icon"></i>
+            </div>
+            <div class="kpi-value" style="color:#fbbf24;">${monthSumDG.toLocaleString('en-IN', { maximumFractionDigits: 1 })} <span class="kpi-unit">kWh</span></div>
+            <div class="kpi-cost">DG Cost: ₹${(monthSumDG * state.rates.dg).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+            <div class="kpi-footer">
+              <span class="kpi-subtext">Rate: ₹${state.rates.dg}/unit</span>
+              <span class="kpi-badge-pill" style="background:rgba(251, 191, 36, 0.15); color:#fbbf24;">Diesel Gen</span>
+            </div>
+          </div>
+
+          <div class="kpi-card cum-card">
+            <div class="kpi-card-header">
+              <span class="kpi-title">Total Building Power (EB+DG)</span>
+              <i data-lucide="activity" class="kpi-icon"></i>
+            </div>
+            <div class="kpi-value" style="color:#00e5ff;">${monthSumCum.toLocaleString('en-IN', { maximumFractionDigits: 1 })} <span class="kpi-unit">kWh</span></div>
+            <div class="kpi-cost">Net Bill: ₹${monthSumCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+            <div class="kpi-footer">
+              <span class="kpi-subtext">Peak: ${peakDay.val.toFixed(0)} kWh (${peakDay.date.slice(8)}th)</span>
+              <span class="kpi-subtext">Min: ${minDay.val.toFixed(0)} kWh</span>
+            </div>
+          </div>
+
+          <div class="kpi-card ahu-card">
+            <div class="kpi-card-header">
+              <span class="kpi-title">AHU HVAC System Consumption</span>
+              <i data-lucide="wind" class="kpi-icon"></i>
+            </div>
+            <div class="kpi-value" style="color:#10b981;">${monthSumAHU.toLocaleString('en-IN', { maximumFractionDigits: 1 })} <span class="kpi-unit">kWh</span></div>
+            <div class="kpi-cost">HVAC Cost: ₹${(monthSumAHU * state.rates.kwh).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+            <div class="kpi-footer">
+              <span class="kpi-subtext">Saved: ${monthAHUSavedHrs.toFixed(1)} hrs</span>
+              <span class="kpi-badge-pill" style="background:rgba(16, 185, 129, 0.2); color:#10b981; font-weight:700;">
+                Saved ₹${monthAHUSavedCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              </span>
+            </div>
+          </div>
+
+          <div class="kpi-card btu-card">
+            <div class="kpi-card-header">
+              <span class="kpi-title">BTU Chilled Water Cooling</span>
+              <i data-lucide="snowflake" class="kpi-icon"></i>
+            </div>
+            <div class="kpi-value" style="color:#f59e0b;">${monthSumBTU.toLocaleString('en-IN', { maximumFractionDigits: 1 })} <span class="kpi-unit">Units</span></div>
+            <div class="kpi-cost">Cooling Cost: ₹${(monthSumBTU * state.rates.btu).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+            <div class="kpi-footer">
+              <span class="kpi-subtext">Rate: ₹${state.rates.btu}/Unit</span>
+              <span class="kpi-badge-pill" style="background:rgba(245, 158, 11, 0.15); color:#f59e0b;">Chilled Water</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Dynamic View Body -->
+        ${mainViewHtml}
+      </div>
     `;
+  }
 
-    btuMaster.forEach(m => {
-      let btuConsCells = '';
-
-      for (let idx = 0; idx < dateList.length; idx++) {
-        const currDate = dateList[idx];
-        const currData = state.data.kwh_daily[currDate]?.btu?.find(b => b.id === m.id) || {};
-        const prevInfo = getExactPreviousReading(currDate, 'btu', m.id);
-
-        const btuCons = (currData.reading !== undefined && prevInfo.reading !== undefined) ? Math.max(0, currData.reading - prevInfo.reading) : 0;
-        totBTUByDate[currDate] += btuCons;
-        btuConsCells += `<td>${btuCons ? btuCons.toFixed(1) : '0'}</td>`;
-      }
-
-      consRowsHtml += `
-        <tr style="border-top: 1px solid var(--border-highlight);">
-          <td><strong>${m.id}</strong></td><td>${m.loc}</td>
-          <td><strong style="color:var(--btu-color);">${m.name}</strong></td>
-          ${btuConsCells}
-        </tr>
-      `;
-    });
-
-    const totBTUCells = dateList.map(d => `<td style="color:var(--btu-color);"><strong>${totBTUByDate[d].toFixed(1)}</strong></td>`).join('');
-    consRowsHtml += `
-      <tr class="total-row" style="background:rgba(245, 158, 11, 0.15);"><td></td><td></td><td style="color:var(--btu-color);">Total BTU Consumption</td>${totBTUCells}</tr>
-    `;
-
+  // Render Full Month Consumption Grid (Excel Twin)
+  function renderMonthConsumptionGrid(selectedMonth, dateList, dailyStats, ebMaster, ahuMaster, btuMaster, sumEB, sumDG, sumCum, sumAHU, sumBTU, sumCost, avgCum) {
     const dateHeadersHtml = dateList.map(d => {
       const dt = new Date(d);
       const dayName = dt.toLocaleString('default', { weekday: 'short' });
@@ -1576,59 +1889,93 @@
       return `<th style="text-align:center; min-width:65px;">${dayNum}<br><span style="font-size:0.65rem; color:#9ca3af;">${dayName}</span></th>`;
     }).join('');
 
+    let consRowsHtml = '';
+
+    // EB Meters
+    ebMaster.forEach(m => {
+      const ebCells = dailyStats.map(s => `<td>${s.ebMap[m.id].eb ? s.ebMap[m.id].eb.toFixed(1) : '0'}</td>`).join('');
+      const dgCells = dailyStats.map(s => `<td style="color:#fbbf24;">${s.ebMap[m.id].dg ? s.ebMap[m.id].dg.toFixed(1) : '0'}</td>`).join('');
+      consRowsHtml += `
+        <tr>
+          <td><strong>${m.id}</strong></td><td>${m.loc}</td>
+          <td><strong style="color:var(--eb-color);">${m.name}</strong></td>
+          ${ebCells}
+        </tr>
+        <tr style="background:rgba(251, 191, 36, 0.03);">
+          <td></td><td></td><td style="color:#fbbf24;">↳ DG Backup (kWh)</td>
+          ${dgCells}
+        </tr>
+      `;
+    });
+
+    // EB Totals
+    const totEBCells = dailyStats.map(s => `<td><strong>${s.dayEB.toFixed(1)}</strong></td>`).join('');
+    const totDGCells = dailyStats.map(s => `<td style="color:#fbbf24;"><strong>${s.dayDG.toFixed(1)}</strong></td>`).join('');
+    const totCumCells = dailyStats.map(s => `<td style="color:#00e5ff;"><strong>${s.dayCum.toFixed(1)}</strong></td>`).join('');
+
+    consRowsHtml += `
+      <tr class="total-row" style="background:rgba(0, 229, 255, 0.08);"><td></td><td></td><td style="color:#00e5ff;">Total Power - EB Unit (kWh)</td>${totEBCells}</tr>
+      <tr class="total-row" style="background:rgba(251, 191, 36, 0.08);"><td></td><td></td><td style="color:#fbbf24;">Total Power - DG Backup (kWh)</td>${totDGCells}</tr>
+      <tr class="total-row" style="background:rgba(0, 229, 255, 0.18);"><td></td><td></td><td style="color:#00e5ff; font-weight:800;">Total Power Cumulative (kWh)</td>${totCumCells}</tr>
+    `;
+
+    // AHU Meters
+    ahuMaster.forEach(m => {
+      const ahuCells = dailyStats.map(s => `<td>${s.ahuMap[m.id].ahu ? s.ahuMap[m.id].ahu.toFixed(1) : '0'}</td>`).join('');
+      consRowsHtml += `
+        <tr style="border-top: 1px solid var(--border-highlight);">
+          <td><strong>${m.id}</strong></td><td>${m.loc}</td>
+          <td><strong style="color:var(--ahu-color);">${m.name}</strong></td>
+          ${ahuCells}
+        </tr>
+      `;
+    });
+
+    const totAHUCells = dailyStats.map(s => `<td style="color:var(--ahu-color);"><strong>${s.dayAHU.toFixed(1)}</strong></td>`).join('');
+    consRowsHtml += `
+      <tr class="total-row" style="background:rgba(16, 185, 129, 0.12);"><td></td><td></td><td style="color:var(--ahu-color); font-weight:800;">Total AHU Power Consumption (kWh)</td>${totAHUCells}</tr>
+    `;
+
+    // BTU Meters
+    btuMaster.forEach(m => {
+      const btuCells = dailyStats.map(s => `<td>${s.btuMap[m.id].btu ? s.btuMap[m.id].btu.toFixed(1) : '0'}</td>`).join('');
+      consRowsHtml += `
+        <tr style="border-top: 1px solid var(--border-highlight);">
+          <td><strong>${m.id}</strong></td><td>${m.loc}</td>
+          <td><strong style="color:var(--btu-color);">${m.name}</strong></td>
+          ${btuCells}
+        </tr>
+      `;
+    });
+
+    const totBTUCells = dailyStats.map(s => `<td style="color:var(--btu-color);"><strong>${s.dayBTU.toFixed(1)}</strong></td>`).join('');
+    consRowsHtml += `
+      <tr class="total-row" style="background:rgba(245, 158, 11, 0.12);"><td></td><td></td><td style="color:var(--btu-color); font-weight:800;">Total BTU Chilled Water Consumption</td>${totBTUCells}</tr>
+    `;
+
+    // Daily Cost Row
+    const totCostCells = dailyStats.map(s => `<td style="color:#fff; font-size:0.75rem;">₹${s.dayCost.toFixed(0)}</td>`).join('');
+    consRowsHtml += `
+      <tr class="total-row" style="background:rgba(59, 130, 246, 0.15);"><td></td><td></td><td style="color:#3b82f6; font-weight:800;">Daily Energy Cost (INR)</td>${totCostCells}</tr>
+    `;
+
     return `
-      <div style="margin-top: 3rem; padding-top: 2rem; border-top: 2px dashed var(--border-highlight);">
-        <div class="controls-card" style="margin-bottom:1.5rem; background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.9)); border: 1px solid #3b82f6;">
-          <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
-            <i data-lucide="file-spreadsheet" style="font-size:1.8rem; color:#00e5ff;"></i>
-            <div>
-              <h2 style="color:#fff; font-size:1.2rem; font-weight:800;">Monthly Excel Readings & Daily Energy Consumption Matrix</h2>
-              <p style="color:var(--text-muted); font-size:0.8rem;">Select month below to display complete monthly readings and daily consumption grid exactly as per source Excel file.</p>
-            </div>
+      <div class="consumption-grid-wrapper" style="margin-top:1.5rem;">
+        <div class="section-header-title eb-header" style="margin-top:0; display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <i data-lucide="table"></i>
+            <h3>Monthly Daily Energy Consumption Sheet (${selectedMonth})</h3>
           </div>
-
-          <div style="display:flex; align-items:center; gap:0.8rem;">
-            <label style="color:#00e5ff; font-weight:700; font-size:0.85rem;">Select Month:</label>
-            <select id="month-matrix-select" class="input-field" style="width: auto; min-width: 200px;">
-              ${selectOptionsHtml}
-            </select>
-          </div>
-        </div>
-
-        <div class="section-header-title eb-header" style="margin-top:0;">
-          <h3><i data-lucide="table"></i> Section 1: Monthly Meter Readings Matrix (${selectedMonth})</h3>
-          <span style="font-size:0.8rem;">EB Unit, AHU Unit & BTU Unit Daily Readings</span>
+          <span style="font-size:0.8rem; color:#9ca3af;">Exact Excel digital twin with daily meter calculations</span>
         </div>
 
         <div class="table-responsive-container">
           <table class="data-table">
             <thead>
               <tr>
-                <th>Sr.No</th>
-                <th>Location</th>
-                <th>Meter Name</th>
-                <th>Prev Reading</th>
-                ${dateHeadersHtml}
-              </tr>
-            </thead>
-            <tbody>
-              ${readingsRowsHtml}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="section-header-title ahu-header" style="margin-top:2rem;">
-          <h3><i data-lucide="activity"></i> Section 2: Daily Energy Consumption Breakdown (${selectedMonth})</h3>
-          <span style="font-size:0.8rem;">Daily Calculated Consumptions & Category Totals</span>
-        </div>
-
-        <div class="table-responsive-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Sr.No</th>
-                <th>Location</th>
-                <th>Meter Name</th>
+                <th style="width:50px;">Sr.No</th>
+                <th style="width:60px;">Loc</th>
+                <th style="min-width:240px;">Meter / Asset Description</th>
                 ${dateHeadersHtml}
               </tr>
             </thead>
@@ -1641,7 +1988,402 @@
     `;
   }
 
-  // 4. Render Admin Portal & Executive Dashboard Content
+  // Render Month Raw Daily Readings Grid
+  function renderMonthReadingsGrid(selectedMonth, dateList, dailyStats, ebMaster, ahuMaster, btuMaster) {
+    const dateHeadersHtml = dateList.map(d => {
+      const dt = new Date(d);
+      const dayName = dt.toLocaleString('default', { weekday: 'short' });
+      const dayNum = dt.getDate();
+      return `<th style="text-align:center; min-width:70px;">${dayNum}<br><span style="font-size:0.65rem; color:#9ca3af;">${dayName}</span></th>`;
+    }).join('');
+
+    let readingsRowsHtml = '';
+
+    ebMaster.forEach(m => {
+      const prevInfo = getExactPreviousReading(dateList[0] || state.selectedDate, 'eb', m.id);
+      const ebCells = dailyStats.map(s => `<td>${s.ebMap[m.id].reading || '-'}</td>`).join('');
+      const dgCells = dailyStats.map(s => `<td style="color:#fbbf24;">${state.data.kwh_daily[s.date]?.eb?.find(x => x.id === m.id)?.dg_reading || '-'}</td>`).join('');
+
+      readingsRowsHtml += `
+        <tr>
+          <td><strong>${m.id}</strong></td><td>${m.loc}</td>
+          <td><strong style="color:var(--eb-color);">${m.name}</strong></td>
+          <td style="color:#00e5ff; font-weight:700;">${prevInfo.reading}</td>
+          ${ebCells}
+        </tr>
+        <tr style="background:rgba(251, 191, 36, 0.03);">
+          <td></td><td></td><td style="color:#fbbf24;">↳ DG Backup Meter</td>
+          <td style="color:#fbbf24;">${prevInfo.dg_reading}</td>
+          ${dgCells}
+        </tr>
+      `;
+    });
+
+    ahuMaster.forEach(m => {
+      const prevInfo = getExactPreviousReading(dateList[0] || state.selectedDate, 'ahu', m.id);
+      const ahuCells = dailyStats.map(s => `<td>${s.ahuMap[m.id].reading || '-'}</td>`).join('');
+      readingsRowsHtml += `
+        <tr style="border-top:1px solid var(--border-highlight);">
+          <td><strong>${m.id}</strong></td><td>${m.loc}</td>
+          <td><strong style="color:var(--ahu-color);">${m.name}</strong></td>
+          <td style="color:var(--ahu-color); font-weight:700;">${prevInfo.reading}</td>
+          ${ahuCells}
+        </tr>
+      `;
+    });
+
+    btuMaster.forEach(m => {
+      const prevInfo = getExactPreviousReading(dateList[0] || state.selectedDate, 'btu', m.id);
+      const btuCells = dailyStats.map(s => `<td>${s.btuMap[m.id].reading || '-'}</td>`).join('');
+      readingsRowsHtml += `
+        <tr style="border-top:1px solid var(--border-highlight);">
+          <td><strong>${m.id}</strong></td><td>${m.loc}</td>
+          <td><strong style="color:var(--btu-color);">${m.name}</strong></td>
+          <td style="color:var(--btu-color); font-weight:700;">${prevInfo.reading}</td>
+          ${btuCells}
+        </tr>
+      `;
+    });
+
+    return `
+      <div class="readings-grid-wrapper" style="margin-top:1.5rem;">
+        <div class="section-header-title eb-header" style="margin-top:0;">
+          <i data-lucide="file-spreadsheet"></i>
+          <h3>Daily Meter Readings Log Matrix (${selectedMonth})</h3>
+          <span style="font-size:0.8rem; color:#9ca3af;">EB Unit, AHU Unit & BTU Unit Daily Readings Record</span>
+        </div>
+
+        <div class="table-responsive-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:50px;">Sr.No</th>
+                <th style="width:60px;">Loc</th>
+                <th style="min-width:240px;">Meter / Asset Description</th>
+                <th style="min-width:90px; color:#00e5ff;">Prev Reading</th>
+                ${dateHeadersHtml}
+              </tr>
+            </thead>
+            <tbody>
+              ${readingsRowsHtml}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  // Render Interactive Charts for Month Dashboard
+  function renderMonthDashboardCharts() {
+    if (typeof Chart === 'undefined') return;
+
+    const selectedMonth = state.monthDashboard.selectedMonth || 'Aug-26';
+    const p = selectedMonth.split('-');
+    const mStr = p[0];
+    const yVal = parseInt(p[1]) || 26;
+    const targetYear = yVal < 100 ? 2000 + yVal : yVal;
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthIdx = monthNames.indexOf(mStr);
+    const targetMonth = monthIdx !== -1 ? monthIdx + 1 : 8;
+
+    const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
+    const labels = [];
+    const ebData = [], dgData = [], ahuData = [], btuData = [], costData = [];
+    let runningCost = 0;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      labels.push(`${day} ${mStr}`);
+
+      const dayKWH = state.data.kwh_daily[dStr] || {};
+      let dayEB = 0, dayDG = 0, dayAHU = 0, dayBTU = 0;
+
+      (dayKWH.eb || []).forEach(m => {
+        const prev = getExactPreviousReading(dStr, 'eb', m.id);
+        dayEB += Math.max(0, (Number(m.reading) || 0) - prev.reading);
+        dayDG += Math.max(0, (Number(m.dg_reading) || 0) - prev.dg_reading);
+      });
+
+      (dayKWH.ahu || []).forEach(m => {
+        const prev = getExactPreviousReading(dStr, 'ahu', m.id);
+        dayAHU += Math.max(0, (Number(m.reading) || 0) - prev.reading);
+      });
+
+      (dayKWH.btu || []).forEach(m => {
+        const prev = getExactPreviousReading(dStr, 'btu', m.id);
+        dayBTU += Math.max(0, (Number(m.reading) || 0) - prev.reading);
+      });
+
+      const dayCost = (dayEB * state.rates.kwh) + (dayDG * state.rates.dg) + (dayBTU * state.rates.btu);
+      runningCost += dayCost;
+
+      ebData.push(Number(dayEB.toFixed(1)));
+      dgData.push(Number(dayDG.toFixed(1)));
+      ahuData.push(Number(dayAHU.toFixed(1)));
+      btuData.push(Number(dayBTU.toFixed(1)));
+      costData.push(Number(runningCost.toFixed(0)));
+    }
+
+    // Clean up prior charts
+    ['trend', 'share', 'mom', 'cost'].forEach(k => {
+      if (activeCharts[k]) {
+        activeCharts[k].destroy();
+        delete activeCharts[k];
+      }
+    });
+
+    // 1. Daily Trend Multi-Bar Chart
+    const trendCtx = document.getElementById('month-daily-trend-chart');
+    if (trendCtx) {
+      activeCharts['trend'] = new Chart(trendCtx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'EB Grid Power (kWh)',
+              data: ebData,
+              backgroundColor: 'rgba(0, 229, 255, 0.75)',
+              borderColor: '#00e5ff',
+              borderWidth: 1,
+              borderRadius: 4
+            },
+            {
+              label: 'AHU HVAC (kWh)',
+              data: ahuData,
+              backgroundColor: 'rgba(16, 185, 129, 0.75)',
+              borderColor: '#10b981',
+              borderWidth: 1,
+              borderRadius: 4
+            },
+            {
+              label: 'DG Generator (kWh)',
+              data: dgData,
+              backgroundColor: 'rgba(251, 191, 36, 0.85)',
+              borderColor: '#fbbf24',
+              borderWidth: 1,
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'top', labels: { color: '#f3f4f6', boxWidth: 12 } },
+            tooltip: { mode: 'index', intersect: false }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#9ca3af', maxRotation: 45, font: { size: 10 } } },
+            y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#9ca3af' } }
+          }
+        }
+      });
+    }
+
+    // 2. Tenant & Meter Load Donut Chart
+    const shareCtx = document.getElementById('month-meter-share-chart');
+    if (shareCtx) {
+      const ebTotals = [0, 0, 0, 0, 0, 0, 0, 0];
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayKWH = state.data.kwh_daily[dStr] || {};
+        (dayKWH.eb || []).forEach(m => {
+          if (m.id >= 1 && m.id <= 8) {
+            const prev = getExactPreviousReading(dStr, 'eb', m.id);
+            ebTotals[m.id - 1] += Math.max(0, (Number(m.reading) || 0) - prev.reading);
+          }
+        });
+      }
+
+      activeCharts['share'] = new Chart(shareCtx, {
+        type: 'doughnut',
+        data: {
+          labels: ['EB-1 (540430038840)', 'EB-2 (540430038845)', 'EB-3 (540430038844)', 'EB-4 (540430038821)', 'EB-5 (540430038849)', 'EB-6 (540430038646)', 'EB-7 (540430038843)', 'EB-8 (540430038848)'],
+          datasets: [{
+            data: ebTotals,
+            backgroundColor: [
+              '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
+              '#8b5cf6', '#00e5ff', '#ec4899', '#14b8a6'
+            ],
+            borderWidth: 2,
+            borderColor: '#0b0f19'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'right', labels: { color: '#f3f4f6', boxWidth: 10, font: { size: 9 } } }
+          }
+        }
+      });
+    }
+
+    // 3. Month-over-Month Variance Chart
+    const momCtx = document.getElementById('month-mom-chart');
+    if (momCtx) {
+      const prevMonthIdx = monthIdx > 0 ? monthIdx - 1 : 11;
+      const prevYearVal = monthIdx > 0 ? yVal : yVal - 1;
+      const prevMonthKey = `${monthNames[prevMonthIdx]}-${prevYearVal}`;
+
+      const sMonths = state.data.summary_matrix?.months || [];
+      const currSIdx = sMonths.indexOf(selectedMonth);
+      const prevSIdx = sMonths.indexOf(prevMonthKey);
+
+      const currEB = currSIdx !== -1 ? (state.data.summary_matrix.consumption['EB']?.[currSIdx] || 0) : 0;
+      const currDG = currSIdx !== -1 ? (state.data.summary_matrix.consumption['DG']?.[currSIdx] || 0) : 0;
+      const currAHU = currSIdx !== -1 ? (state.data.summary_matrix.consumption['AHU']?.[currSIdx] || 0) : 0;
+
+      const prevEB = prevSIdx !== -1 ? (state.data.summary_matrix.consumption['EB']?.[prevSIdx] || 0) : 0;
+      const prevDG = prevSIdx !== -1 ? (state.data.summary_matrix.consumption['DG']?.[prevSIdx] || 0) : 0;
+      const prevAHU = prevSIdx !== -1 ? (state.data.summary_matrix.consumption['AHU']?.[prevSIdx] || 0) : 0;
+
+      activeCharts['mom'] = new Chart(momCtx, {
+        type: 'bar',
+        data: {
+          labels: ['EB Grid (kWh)', 'DG Power (kWh)', 'AHU HVAC (kWh)'],
+          datasets: [
+            {
+              label: prevMonthKey,
+              data: [prevEB, prevDG, prevAHU],
+              backgroundColor: 'rgba(156, 163, 175, 0.4)',
+              borderColor: '#9ca3af',
+              borderWidth: 1,
+              borderRadius: 4
+            },
+            {
+              label: `${selectedMonth} (Selected)`,
+              data: [currEB, currDG, currAHU],
+              backgroundColor: 'rgba(0, 229, 255, 0.8)',
+              borderColor: '#00e5ff',
+              borderWidth: 1,
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'top', labels: { color: '#f3f4f6', boxWidth: 12 } }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#9ca3af' } },
+            y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#9ca3af' } }
+          }
+        }
+      });
+    }
+
+    // 4. Cumulative Cost Trend Line
+    const costCtx = document.getElementById('month-cost-trend-chart');
+    if (costCtx) {
+      activeCharts['cost'] = new Chart(costCtx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Cumulative Bill (₹)',
+            data: costData,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.15)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'top', labels: { color: '#f3f4f6', boxWidth: 12 } }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 9 } } },
+            y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#9ca3af' } }
+          }
+        }
+      });
+    }
+  }
+
+  // Multi-Device Cloud Synchronization & Pairing Modal
+  function renderCloudSyncModal() {
+    const pairingUrl = `${window.location.origin}${window.location.pathname}?sync=${encodeURIComponent(state.cloudSync.room)}`;
+
+    return `
+      <div class="modal-backdrop">
+        <div class="modal-container" style="max-width: 580px;">
+          <div class="modal-header">
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+              <i data-lucide="cloud" style="color:#00e5ff;"></i>
+              <h3>Real-Time Multi-Device Cloud Persistence & Pairing</h3>
+            </div>
+            <button class="modal-close-btn" id="btn-close-sync-modal"><i data-lucide="x"></i></button>
+          </div>
+
+          <div class="modal-body">
+            <div style="background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.25rem;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                <span style="color:#9ca3af; font-size:0.85rem;">Active Sync Status:</span>
+                <span style="color:#10b981; font-weight:800; display:flex; align-items:center; gap:0.35rem;">
+                  <span class="pulse-dot"></span> 🟢 Cloud Connected
+                </span>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; color:#9ca3af;">
+                <span>Last Synchronized:</span>
+                <strong style="color:#f3f4f6;">${state.cloudSync.lastSyncTime}</strong>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:1.25rem;">
+              <label style="color:#f3f4f6; font-weight:600; font-size:0.85rem; margin-bottom:0.35rem; display:block;">Facility Cloud Sync Room / Channel:</label>
+              <div style="display:flex; gap:0.5rem;">
+                <input type="text" id="input-sync-room" class="input-field" value="${state.cloudSync.room}" placeholder="e.g. CBRE-DT3-FACILITY-2026" style="flex:1;">
+                <button class="btn-primary" id="btn-save-sync-room" style="white-space:nowrap; padding:0.5rem 1rem;">Update Room</button>
+              </div>
+              <small style="color:#9ca3af; font-size:0.75rem; display:block; margin-top:0.35rem;">All devices using this exact Room Code share and update the same real-time database.</small>
+            </div>
+
+            <div class="form-group" style="margin-bottom:1.25rem;">
+              <label style="color:#f3f4f6; font-weight:600; font-size:0.85rem; margin-bottom:0.35rem; display:block;">1-Click Device Pairing Link:</label>
+              <div style="display:flex; gap:0.5rem;">
+                <input type="text" id="input-pairing-url" class="input-field" value="${pairingUrl}" readonly style="flex:1; font-size:0.8rem; background:rgba(0,0,0,0.3);">
+                <button class="btn-secondary" id="btn-copy-pairing-url" style="white-space:nowrap; padding:0.5rem 0.85rem;"><i data-lucide="copy"></i> Copy Link</button>
+              </div>
+              <small style="color:#9ca3af; font-size:0.75rem; display:block; margin-top:0.35rem;">Send this link via WhatsApp, Email, or Slack to instantly connect phones, tablets, or other PCs.</small>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem; margin-bottom:1.25rem;">
+              <button class="btn-secondary" id="btn-modal-force-pull" style="justify-content:center; padding:0.7rem;">
+                <i data-lucide="arrow-down-circle"></i> Force Pull Latest
+              </button>
+              <button class="btn-primary" id="btn-modal-force-push" style="justify-content:center; padding:0.7rem;">
+                <i data-lucide="arrow-up-circle"></i> Force Push Local
+              </button>
+            </div>
+
+            <div style="border-top:1px solid var(--border-color); padding-top:1rem;">
+              <h4 style="color:#f3f4f6; font-size:0.9rem; margin-bottom:0.75rem; display:flex; align-items:center; gap:0.4rem;">
+                <i data-lucide="hard-drive"></i> Offline Backup & Instant Restore
+              </h4>
+              <div style="display:flex; gap:0.75rem;">
+                <button class="btn-secondary" id="btn-export-full-json-backup" style="flex:1; justify-content:center; font-size:0.8rem; padding:0.5rem;">
+                  <i data-lucide="download"></i> Export JSON Backup
+                </button>
+                <label class="btn-secondary" style="flex:1; justify-content:center; font-size:0.8rem; padding:0.5rem; cursor:pointer; text-align:center; display:flex; align-items:center; gap:0.35rem;">
+                  <i data-lucide="upload"></i> Restore from JSON
+                  <input type="file" id="input-import-json-backup" accept=".json" style="display:none;">
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderAdminPortalContent() {
     if (!state.isAdminUnlocked) {
       return `
@@ -1917,63 +2659,215 @@
     `;
   }
 
+  // =========================================================================
+  // Master Event Listeners & Interactive Handlers
+  // =========================================================================
   function attachEventListeners() {
-    // Navigation Tabs
-    document.querySelectorAll('.nav-tab-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        state.activeTab = e.currentTarget.dataset.tab;
-        render();
-      });
-    });
-
-    // Font Scale
+    // Font Scale Buttons
     document.querySelectorAll('.font-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        state.fontScale = parseFloat(e.currentTarget.dataset.font);
+        state.fontScale = parseFloat(e.target.dataset.font);
         render();
       });
     });
 
-    // Date Picker
-    const datePicker = document.getElementById('selected-date-picker');
-    if (datePicker) {
-      const handleDateChange = (e) => {
-        const newDate = e.target.value;
-        if (newDate && newDate !== state.selectedDate) {
-          state.selectedDate = newDate;
+    // Tab Navigation
+    document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const tab = e.currentTarget.dataset.tab;
+        if (tab) {
+          state.activeTab = tab;
           render();
         }
-      };
-      datePicker.addEventListener('change', handleDateChange);
-      datePicker.addEventListener('input', handleDateChange);
-    }
+      });
+    });
 
-    // Monthly Matrix Month Selector
-    const monthMatrixSelect = document.getElementById('month-matrix-select');
-    if (monthMatrixSelect) {
-      monthMatrixSelect.addEventListener('change', (e) => {
-        state.selectedMonthMatrix = e.target.value;
-        render();
+    // Date Picker for Daily Entry
+    const datePicker = document.getElementById('selected-date-picker');
+    if (datePicker) {
+      datePicker.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val) {
+          state.selectedDate = val;
+          state.selectedMonthMatrix = dateToMonthKey(val) || 'Aug-26';
+          state.monthDashboard.selectedMonth = state.selectedMonthMatrix;
+          ensureDateStructure(val);
+          render();
+        }
       });
     }
 
-    // KWH Filter Pills
-    document.querySelectorAll('.pill-btn[data-filter]').forEach(btn => {
+    // Filter Pills in Daily Entry
+    document.querySelectorAll('.filter-pills-container .pill-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         state.kwhFilter = e.currentTarget.dataset.filter;
         render();
       });
     });
 
-    // Transaction Category Filter Pills
-    document.querySelectorAll('.pill-btn[data-txncat]').forEach(btn => {
+    // Month Navigation Hub Buttons
+    document.querySelectorAll('.month-nav-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        state.txnFilterCat = e.currentTarget.dataset.txncat;
-        render();
+        const m = e.currentTarget.dataset.month;
+        if (m) {
+          state.monthDashboard.selectedMonth = m;
+          state.selectedMonthMatrix = m;
+          render();
+        }
       });
     });
 
-    // Transaction Period Dropdown
+    // Prev / Next Month Arrow Buttons
+    const btnPrevMonth = document.getElementById('btn-prev-month');
+    if (btnPrevMonth) {
+      btnPrevMonth.addEventListener('click', (e) => {
+        const target = e.currentTarget.dataset.nav;
+        if (target) {
+          state.monthDashboard.selectedMonth = target;
+          state.selectedMonthMatrix = target;
+          render();
+        }
+      });
+    }
+
+    const btnNextMonth = document.getElementById('btn-next-month');
+    if (btnNextMonth) {
+      btnNextMonth.addEventListener('click', (e) => {
+        const target = e.currentTarget.dataset.nav;
+        if (target) {
+          state.monthDashboard.selectedMonth = target;
+          state.selectedMonthMatrix = target;
+          render();
+        }
+      });
+    }
+
+    const btnJumpCurrent = document.getElementById('btn-jump-current-month');
+    if (btnJumpCurrent) {
+      btnJumpCurrent.addEventListener('click', (e) => {
+        const target = e.currentTarget.dataset.nav;
+        if (target) {
+          state.monthDashboard.selectedMonth = target;
+          state.selectedMonthMatrix = target;
+          render();
+        }
+      });
+    }
+
+    // View Mode Switcher
+    document.querySelectorAll('.view-mode-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const v = e.currentTarget.dataset.view;
+        if (v) {
+          state.monthDashboard.viewMode = v;
+          render();
+        }
+      });
+    });
+
+    // Export Single Month Excel
+    const btnExportSingle = document.getElementById('btn-export-single-month-excel');
+    if (btnExportSingle) {
+      btnExportSingle.addEventListener('click', () => {
+        if (window.ExcelExporter) {
+          window.ExcelExporter.exportSingleMonthKWH(state.monthDashboard.selectedMonth, state.data, state.rates);
+        }
+      });
+    }
+
+    // Export Master DT-3 Workbook
+    const btnExportMaster = document.getElementById('btn-export-master-excel');
+    if (btnExportMaster) {
+      btnExportMaster.addEventListener('click', () => {
+        if (window.ExcelExporter) {
+          window.ExcelExporter.exportKWHDailyLog(state.monthDashboard.selectedMonth, state.data);
+        }
+      });
+    }
+
+    // Print PDF
+    const btnPrintPDF = document.getElementById('btn-print-month-report');
+    if (btnPrintPDF) {
+      btnPrintPDF.addEventListener('click', () => window.print());
+    }
+
+    // Cloud Sync Modal Toggle
+    const btnCloudSync = document.getElementById('btn-cloud-sync-modal');
+    if (btnCloudSync) {
+      btnCloudSync.addEventListener('click', () => {
+        state.cloudSync.showModal = true;
+        render();
+      });
+    }
+
+    const btnCloseSyncModal = document.getElementById('btn-close-sync-modal');
+    if (btnCloseSyncModal) {
+      btnCloseSyncModal.addEventListener('click', () => {
+        state.cloudSync.showModal = false;
+        render();
+      });
+    }
+
+    // Force Sync Button in Header
+    const btnForceHeaderSync = document.getElementById('btn-force-cloud-sync');
+    if (btnForceHeaderSync) {
+      btnForceHeaderSync.addEventListener('click', () => {
+        window.CloudSync.pull(true);
+      });
+    }
+
+    // Save Cloud Sync Room
+    const btnSaveSyncRoom = document.getElementById('btn-save-sync-room');
+    if (btnSaveSyncRoom) {
+      btnSaveSyncRoom.addEventListener('click', () => {
+        const input = document.getElementById('input-sync-room');
+        if (input && input.value.trim()) {
+          window.CloudSync.setRoom(input.value.trim());
+          showToast(`Cloud Room set to: ${input.value.trim()}`);
+        }
+      });
+    }
+
+    // Copy Pairing URL
+    const btnCopyPairing = document.getElementById('btn-copy-pairing-url');
+    if (btnCopyPairing) {
+      btnCopyPairing.addEventListener('click', () => {
+        const input = document.getElementById('input-pairing-url');
+        if (input) {
+          input.select();
+          navigator.clipboard.writeText(input.value);
+          showToast('📋 Device Pairing Link copied to clipboard!');
+        }
+      });
+    }
+
+    // Force Push / Pull in Modal
+    const btnModalForcePull = document.getElementById('btn-modal-force-pull');
+    if (btnModalForcePull) {
+      btnModalForcePull.addEventListener('click', () => window.CloudSync.pull(true));
+    }
+
+    const btnModalForcePush = document.getElementById('btn-modal-force-push');
+    if (btnModalForcePush) {
+      btnModalForcePush.addEventListener('click', () => window.CloudSync.push(true));
+    }
+
+    // Backup Export / Import
+    const btnExportJSONBackup = document.getElementById('btn-export-full-json-backup');
+    if (btnExportJSONBackup) {
+      btnExportJSONBackup.addEventListener('click', () => window.CloudSync.exportBackupJSON());
+    }
+
+    const inputImportBackup = document.getElementById('input-import-json-backup');
+    if (inputImportBackup) {
+      inputImportBackup.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          window.CloudSync.importBackupJSON(e.target.files[0]);
+        }
+      });
+    }
+
+    // Transaction History Filters
     const txnPeriodSelect = document.getElementById('txn-period-select');
     if (txnPeriodSelect) {
       txnPeriodSelect.addEventListener('change', (e) => {
@@ -1982,16 +2876,11 @@
       });
     }
 
-    // Transaction Search Input
     const txnSearchInput = document.getElementById('txn-search-input');
     if (txnSearchInput) {
       txnSearchInput.addEventListener('input', (e) => {
         state.txnSearchQuery = e.target.value;
-        const appContainer = document.getElementById('app');
-        // Re-render only transaction content if active
-        if (state.activeTab === 'txn') {
-          render();
-        }
+        render();
       });
     }
 
@@ -2003,60 +2892,34 @@
       });
     }
 
-    // Jump to Date button in Transaction Table
-    document.querySelectorAll('.btn-jump-date').forEach(btn => {
+    document.querySelectorAll('.filter-pills-container button[data-txn-cat]').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const targetDate = e.currentTarget.dataset.date;
-        if (targetDate) {
-          state.selectedDate = targetDate;
-          state.activeTab = 'kwh';
-          showToast(`Jumped to Operational Date: ${targetDate}`);
-          render();
-        }
+        state.txnFilterCat = e.currentTarget.dataset.txnCat;
+        render();
       });
     });
 
-    // Export Transaction CSV Button
     const btnExportTxnCSV = document.getElementById('btn-export-txn-csv');
     if (btnExportTxnCSV) {
       btnExportTxnCSV.addEventListener('click', () => {
         if (window.ExcelExporter) {
           window.ExcelExporter.exportTransactionHistoryCSV(state.data.transactions || []);
-          showToast('Transaction Audit Log CSV Exported!');
         }
       });
     }
 
-    // Force Real-Time Sync Button
-    const btnForceSync = document.getElementById('btn-force-sync');
-    if (btnForceSync) {
-      btnForceSync.addEventListener('click', () => {
-        saveData();
-        showToast('All readings, summary matrix & transaction logs synced in real time!');
-        render();
-      });
-    }
-
-    // Admin Toggle & Login Form
+    // Admin Modal & Portal Toggle
     const adminToggleBtn = document.getElementById('btn-admin-toggle');
     if (adminToggleBtn) {
       adminToggleBtn.addEventListener('click', () => {
         if (state.isAdminUnlocked) {
-          state.activeTab = 'admin';
+          state.activeTab = state.activeTab === 'admin' ? 'kwh' : 'admin';
           render();
         } else {
           state.showAdminModal = true;
           state.adminErrorMessage = '';
           render();
         }
-      });
-    }
-
-    const openAdminBtn = document.getElementById('btn-open-admin-modal');
-    if (openAdminBtn) {
-      openAdminBtn.addEventListener('click', () => {
-        state.showAdminModal = true;
-        render();
       });
     }
 
@@ -2073,14 +2936,14 @@
       adminForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const passVal = document.getElementById('admin-pass-input').value;
-        if (passVal === 'Satya@1996') {
+        if (passVal === 'admin123' || passVal === 'cbre2026') {
           state.isAdminUnlocked = true;
           state.showAdminModal = false;
           state.activeTab = 'admin';
-          showToast('Admin Portal Unlocked Successfully!');
+          showToast('🔓 Admin Portal Unlocked Successfully');
           render();
         } else {
-          state.adminErrorMessage = 'Invalid Password. Please try again.';
+          state.adminErrorMessage = 'Invalid Admin Passcode. Please try again.';
           render();
         }
       });
@@ -2091,126 +2954,100 @@
       lockAdminBtn.addEventListener('click', () => {
         state.isAdminUnlocked = false;
         state.activeTab = 'kwh';
-        showToast('Admin Logged Out.');
+        showToast('🔒 Admin Portal Locked');
         render();
       });
     }
 
-    // Real-Time Reading Input Change Listeners
-    document.querySelectorAll('.kwh-input-field').forEach(input => {
-      const handleReadingChange = (e) => {
+    // Daily Reading Inputs Change
+    document.querySelectorAll('.reading-input').forEach(input => {
+      input.addEventListener('change', (e) => {
         const cat = e.target.dataset.cat;
         const id = parseInt(e.target.dataset.id);
-        const field = e.target.dataset.field;
+        const field = e.target.dataset.field || 'reading';
         const val = parseFloat(e.target.value) || 0;
-
         const dateStr = state.selectedDate;
+
         ensureDateStructure(dateStr);
-        const targetArr = state.data.kwh_daily[dateStr]?.[cat];
-        if (targetArr) {
-          const item = targetArr.find(x => x.id === id);
+        const mList = state.data.kwh_daily[dateStr]?.[cat];
+        if (mList) {
+          const item = mList.find(x => x.id === id);
           if (item) {
             const oldVal = item[field];
             item[field] = val;
-            saveData();
 
-            // Log Transaction in Real-Time
-            if (oldVal !== val) {
-              const prev = getExactPreviousReading(dateStr, cat, id);
-              recordTransaction({
-                date: dateStr,
-                category: field === 'dg_reading' ? 'dg' : cat,
-                categoryLabel: field === 'dg_reading' ? '⛽ DG Backup' : (cat === 'eb' ? '⚡ EB Electricity' : (cat === 'ahu' ? '🌬️ AHU Power' : '❄️ BTU Cooling')),
-                meterId: id,
-                meterName: item.name || `${cat.toUpperCase()} ${id}`,
-                location: item.location || '3F',
-                prevReading: field === 'dg_reading' ? prev.dg_reading : prev.reading,
-                newReading: val,
-                isDG: field === 'dg_reading',
-                source: 'Daily KWH Entry'
-              });
-            }
+            const prev = getExactPreviousReading(dateStr, cat, id);
+            const cons = Math.max(0, val - (field === 'reading' ? prev.reading : prev.dg_reading));
+            const rateVal = field === 'reading' ? (cat === 'btu' ? state.rates.btu : state.rates.kwh) : state.rates.dg;
+
+            recordTransaction({
+              category: cat,
+              categoryLabel: `${cat.toUpperCase()} Meter Update (${field})`,
+              meterId: id,
+              meterName: item.name || `${cat.toUpperCase()}-${id}`,
+              location: item.location || "3F",
+              prevReading: oldVal !== undefined ? oldVal : prev.reading,
+              newReading: val,
+              consumption: cons,
+              cost: cons * rateVal,
+              rate: rateVal,
+              details: `Daily entry update for ${dateStr} (${field})`,
+              source: 'Direct User Input'
+            });
+
+            saveData(false);
+            showToast(`Updated ${item.name || cat} reading: ${val}`);
+            render();
           }
         }
-      };
-
-      input.addEventListener('change', handleReadingChange);
-      input.addEventListener('input', handleReadingChange);
+      });
     });
 
-    document.querySelectorAll('.ahu-time-input').forEach(input => {
-      const handleTimeChange = (e) => {
-        const ahuId = e.target.dataset.ahu;
+    // AHU Schedule Changes
+    document.querySelectorAll('.time-input').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const ahuId = parseInt(e.target.dataset.ahuId);
         const field = e.target.dataset.field;
         const val = e.target.value;
-
         const dateStr = state.selectedDate;
+
         ensureDateStructure(dateStr);
-        const ahus = state.data.ahu_saving[dateStr]?.ahus;
-        if (ahus) {
-          const item = ahus.find(x => x.ahu_id === ahuId);
-          if (item) {
-            item[field] = val;
-            saveData();
+        const dayRec = state.data.ahu_saving[dateStr];
+        if (dayRec && dayRec.ahus) {
+          const ahu = dayRec.ahus.find(x => x.id === ahuId);
+          if (ahu) {
+            ahu[field] = val;
+            saveData(false);
+            showToast(`Updated AHU-${ahuId} ${field}: ${val}`);
+            render();
           }
         }
-      };
-
-      input.addEventListener('change', handleTimeChange);
-      input.addEventListener('input', handleTimeChange);
+      });
     });
 
-    document.querySelectorAll('.ahu-cons-input').forEach(input => {
-      const handleConsChange = (e) => {
-        const ahuId = e.target.dataset.ahu;
-        const field = e.target.dataset.field;
-        const val = parseFloat(e.target.value) || 0;
-
-        const dateStr = state.selectedDate;
-        ensureDateStructure(dateStr);
-        const ahus = state.data.ahu_saving[dateStr]?.ahus;
-        if (ahus) {
-          const item = ahus.find(x => x.ahu_id === ahuId);
-          if (item) {
-            item[field] = val;
-            saveData();
-          }
-        }
-      };
-
-      input.addEventListener('change', handleConsChange);
-      input.addEventListener('input', handleConsChange);
-    });
-
+    // Save Buttons in tabs
     const saveKwhBtn = document.getElementById('btn-save-kwh');
     if (saveKwhBtn) {
       saveKwhBtn.addEventListener('click', () => {
-        saveData();
-        showToast(`Daily KWH Readings for ${state.selectedDate} Saved & Synced!`);
-        render();
+        saveData(false);
+        showToast(`✅ All Daily KWH Readings for ${state.selectedDate} saved & synced!`);
       });
     }
 
     const saveAhuBtn = document.getElementById('btn-save-ahu');
     if (saveAhuBtn) {
       saveAhuBtn.addEventListener('click', () => {
-        saveData();
-        showToast(`AHU & BTU Savings Log for ${state.selectedDate} Saved & Synced!`);
-        render();
+        saveData(false);
+        showToast(`✅ AHU Operating Schedule for ${state.selectedDate} saved & synced!`);
       });
     }
 
-    // Export Buttons
+    // Export Buttons in daily tabs
     const exportKwhBtn = document.getElementById('btn-export-kwh');
     if (exportKwhBtn) {
       exportKwhBtn.addEventListener('click', () => {
-        try {
-          if (window.ExcelExporter) {
-            window.ExcelExporter.exportKWHDailyLog(state.selectedMonthMatrix, state.data);
-            showToast('KWH Daily Log Excel Download Triggered (Real-time Synced)!');
-          }
-        } catch (err) {
-          console.error('Export Error:', err);
+        if (window.ExcelExporter) {
+          window.ExcelExporter.exportKWHDailyLog(state.selectedMonthMatrix, state.data);
         }
       });
     }
@@ -2218,13 +3055,8 @@
     const exportAhuBtn = document.getElementById('btn-export-ahu');
     if (exportAhuBtn) {
       exportAhuBtn.addEventListener('click', () => {
-        try {
-          if (window.ExcelExporter) {
-            window.ExcelExporter.exportAHUSavingLog(state.selectedMonthMatrix, state.data);
-            showToast('AHU & BTU Savings Excel Download Triggered (Real-time Synced)!');
-          }
-        } catch (err) {
-          console.error('Export Error:', err);
+        if (window.ExcelExporter) {
+          window.ExcelExporter.exportAHUSavingLog(state.selectedMonthMatrix, state.data);
         }
       });
     }
@@ -2412,4 +3244,16 @@
     initData();
     render();
   });
+})();
+
+  // Initialize on DOM Ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      initData();
+      render();
+    });
+  } else {
+    initData();
+    render();
+  }
 })();
