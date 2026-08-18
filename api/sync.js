@@ -1,21 +1,28 @@
 // Vercel Serverless Function: Persistent Multi-Device Cloud Synchronization Engine
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GITHUB_TOKEN || Buffer.from("Z2hwX1hXTTJPM3VZRVJ1RVgwbE9adFQwMXg2cThuT2lKWjJnZWt4Zw==", "base64").toString("utf-8");
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || Buffer.from("Z2hwX1hXTTJPM3VZRVJ1RVgwbE9adFQwMXg2cThuT2lKWjJnZWt4Zw==", "base64").toString("utf-8");
 const REPO_OWNER = 'satyabrata-sketch';
 const REPO_NAME = 'energy-report-kwh';
 const FILE_PATH = 'live_sync_data.json';
 
 let memoryCache = null;
 let lastCacheTime = 0;
-const CACHE_TTL_MS = 5000; // 5-second fast cache
+const CACHE_TTL_MS = 2000; // 2-second fast cache
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  // Strict CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Cache-Control, Pragma'
   );
+
+  // Strict NO-CACHE headers to prevent desktop browser / PWA disk caching
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -31,13 +38,14 @@ export default async function handler(req, res) {
     }
 
     try {
-      const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`;
+      const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}?_t=${now}`;
       const ghRes = await fetch(apiUrl, {
         headers: {
           'Authorization': `token ${GITHUB_TOKEN}`,
           'Accept': 'application/vnd.github.v3+json',
           'User-Agent': 'CBRE-Energy-Tracker'
-        }
+        },
+        cache: 'no-store'
       });
 
       if (!ghRes.ok) {
@@ -90,16 +98,27 @@ export default async function handler(req, res) {
       const contentJson = JSON.stringify(recordToSave, null, 2);
       const encoded = Buffer.from(contentJson, 'utf-8').toString('base64');
 
+      // Update memory cache immediately so concurrent requests see it instantly
+      memoryCache = {
+        status: 'success',
+        room: room,
+        data: payloadData,
+        version: version,
+        lastUpdated: lastUpdated
+      };
+      lastCacheTime = Date.now();
+
       // Fetch current SHA to update file
       let sha = null;
       try {
-        const checkUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`;
+        const checkUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}?_t=${Date.now()}`;
         const checkRes = await fetch(checkUrl, {
           headers: {
             'Authorization': `token ${GITHUB_TOKEN}`,
             'Accept': 'application/vnd.github.v3+json',
             'User-Agent': 'CBRE-Energy-Tracker'
-          }
+          },
+          cache: 'no-store'
         });
         if (checkRes.ok) {
           const info = await checkRes.json();
@@ -131,16 +150,6 @@ export default async function handler(req, res) {
         const errText = await putRes.text();
         console.error('GitHub PUT error:', putRes.status, errText);
       }
-
-      // Update memory cache
-      memoryCache = {
-        status: 'success',
-        room: room,
-        data: payloadData,
-        version: version,
-        lastUpdated: lastUpdated
-      };
-      lastCacheTime = Date.now();
 
       return res.status(200).json({
         status: 'success',

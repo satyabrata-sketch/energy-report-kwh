@@ -505,14 +505,14 @@
       // Initial cloud pull
       this.pull(false);
 
-      // Auto-poll cloud every 20 seconds
+      // Auto-poll cloud every 4 seconds for real-time instantaneous updates across devices
       setInterval(() => {
         if (state.cloudSync.isAutoPolling && document.visibilityState === 'visible') {
           this.pull(false);
         }
-      }, 20000);
+      }, 4000);
 
-      // Pull when user switches back to the tab
+      // Pull immediately when user switches back to the tab or focuses window
       window.addEventListener('focus', () => this.pull(false));
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') this.pull(false);
@@ -530,9 +530,17 @@
       state.cloudSync.status = 'syncing';
       this.updateHeaderSyncUI();
 
-      const syncUrl = `/api/sync?room=${encodeURIComponent(state.cloudSync.room)}`;
+      const syncUrl = `/api/sync?room=${encodeURIComponent(state.cloudSync.room)}&_nocache=${Date.now()}`;
 
-      fetch(syncUrl, { method: 'GET', headers: { 'Accept': 'application/json' } })
+      fetch(syncUrl, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      })
         .then(res => {
           if (!res.ok) throw new Error('Cloud sync HTTP ' + res.status);
           return res.json();
@@ -543,6 +551,7 @@
             const cloudVersion = json.version || 0;
 
             let hasChanges = false;
+            let updatedDates = [];
             if (!state.data.kwh_daily) state.data.kwh_daily = {};
             if (!state.data.ahu_saving) state.data.ahu_saving = {};
 
@@ -551,6 +560,7 @@
               if (!state.data.kwh_daily[d]) {
                 state.data.kwh_daily[d] = cloudData.kwh_daily[d];
                 hasChanges = true;
+                updatedDates.push(d);
               } else {
                 const localDay = state.data.kwh_daily[d];
                 const cloudDay = cloudData.kwh_daily[d];
@@ -563,10 +573,12 @@
                       if (!lm) {
                         localDay[cat].push(cm);
                         hasChanges = true;
+                        if (!updatedDates.includes(d)) updatedDates.push(d);
                       } else if (cm.reading !== undefined && cm.reading !== lm.reading) {
                         lm.reading = cm.reading;
                         if (cm.dg_reading !== undefined) lm.dg_reading = cm.dg_reading;
                         hasChanges = true;
+                        if (!updatedDates.includes(d)) updatedDates.push(d);
                       }
                     });
                   }
@@ -618,19 +630,12 @@
               state.cloudSync.lastCloudVersion = Math.max(cloudVersion, state.cloudSync.lastCloudVersion);
               recalculateDynamicSummaryMatrix();
               localStorage.setItem('kwh_ahu_tracker_data_v2', JSON.stringify(state.data));
-              if (manual) showToast(`☁️ Cloud data synchronized (Room: ${state.cloudSync.room})`);
-              render();
-            } else {
-              const localDatesCount = Object.keys(state.data.kwh_daily || {}).length;
-              const cloudDatesCount = Object.keys(cloudData.kwh_daily || {}).length;
-              if (localDatesCount > cloudDatesCount) {
-                window.CloudSync.push(false);
+              if (manual) {
+                showToast(`☁️ Cloud data synchronized (Room: ${state.cloudSync.room})`);
+              } else if (hasChanges && updatedDates.length > 0) {
+                showToast(`⚡ Live update synced from other device (${updatedDates.join(', ')})`);
               }
-            }
-          } else {
-            const localDatesCount = Object.keys(state.data.kwh_daily || {}).length;
-            if (localDatesCount > 0) {
-              window.CloudSync.push(false);
+              render();
             }
           }
           state.cloudSync.status = 'synced';
@@ -663,9 +668,13 @@
         data: state.data
       };
 
-      fetch('/api/sync', {
+      fetch(`/api/sync?_nocache=${Date.now()}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store'
+        },
         body: JSON.stringify(payload)
       })
       .then(res => res.json())
