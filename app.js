@@ -546,18 +546,60 @@
             if (!state.data.kwh_daily) state.data.kwh_daily = {};
             if (!state.data.ahu_saving) state.data.ahu_saving = {};
 
-            // Merge cloud dates into local
+            // Deep merge cloud kwh_daily dates into local
             Object.keys(cloudData.kwh_daily || {}).forEach(d => {
-              if (!state.data.kwh_daily[d] || cloudVersion > state.cloudSync.lastCloudVersion) {
+              if (!state.data.kwh_daily[d]) {
                 state.data.kwh_daily[d] = cloudData.kwh_daily[d];
                 hasChanges = true;
+              } else {
+                const localDay = state.data.kwh_daily[d];
+                const cloudDay = cloudData.kwh_daily[d];
+                
+                ['eb', 'ahu', 'btu'].forEach(cat => {
+                  if (cloudDay[cat] && cloudDay[cat].length) {
+                    if (!localDay[cat]) localDay[cat] = [];
+                    cloudDay[cat].forEach(cm => {
+                      const lm = localDay[cat].find(x => x.id === cm.id);
+                      if (!lm) {
+                        localDay[cat].push(cm);
+                        hasChanges = true;
+                      } else if (cm.reading !== undefined && cm.reading !== lm.reading) {
+                        lm.reading = cm.reading;
+                        if (cm.dg_reading !== undefined) lm.dg_reading = cm.dg_reading;
+                        hasChanges = true;
+                      }
+                    });
+                  }
+                });
               }
             });
 
+            // Deep merge cloud ahu_saving records
             Object.keys(cloudData.ahu_saving || {}).forEach(d => {
-              if (!state.data.ahu_saving[d] || cloudVersion > state.cloudSync.lastCloudVersion) {
+              if (!state.data.ahu_saving[d]) {
                 state.data.ahu_saving[d] = cloudData.ahu_saving[d];
                 hasChanges = true;
+              } else {
+                const localAHU = state.data.ahu_saving[d];
+                const cloudAHU = cloudData.ahu_saving[d];
+                if (cloudAHU.ahus && cloudAHU.ahus.length) {
+                  if (!localAHU.ahus) localAHU.ahus = [];
+                  cloudAHU.ahus.forEach(ca => {
+                    const la = localAHU.ahus.find(x => x.ahu_id === ca.ahu_id);
+                    if (!la) {
+                      localAHU.ahus.push(ca);
+                      hasChanges = true;
+                    } else {
+                      if (ca.on_time !== la.on_time || ca.off_time !== la.off_time || ca.kwh_cons !== la.kwh_cons || ca.btu_cons !== la.btu_cons) {
+                        la.on_time = ca.on_time;
+                        la.off_time = ca.off_time;
+                        la.kwh_cons = ca.kwh_cons;
+                        la.btu_cons = ca.btu_cons;
+                        hasChanges = true;
+                      }
+                    }
+                  });
+                }
               }
             });
 
@@ -3199,7 +3241,8 @@
     if (saveKwhBtn) {
       saveKwhBtn.addEventListener('click', () => {
         saveData(false);
-        showToast(`✅ All Daily KWH Readings for ${state.selectedDate} saved & synced!`);
+        window.CloudSync.push(true);
+        showToast(`✅ All Daily KWH Readings for ${state.selectedDate} saved & cloud-synced!`);
       });
     }
 
@@ -3207,7 +3250,8 @@
     if (saveAhuBtn) {
       saveAhuBtn.addEventListener('click', () => {
         saveData(false);
-        showToast(`✅ AHU Operating Schedule for ${state.selectedDate} saved & synced!`);
+        window.CloudSync.push(true);
+        showToast(`✅ AHU Operating Schedule for ${state.selectedDate} saved & cloud-synced!`);
       });
     }
 
