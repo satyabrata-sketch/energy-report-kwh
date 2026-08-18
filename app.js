@@ -1067,7 +1067,7 @@
             </div>
             <div class="input-block">
               <label style="color:#00e5ff;">Current Reading (${dateStr})</label>
-              <input type="number" step="any" class="input-field kwh-input-field" 
+              <input type="number" step="any" class="input-field reading-input kwh-input-field" 
                      data-cat="eb" data-id="${meter.id}" data-field="reading" value="${currVal}">
             </div>
           </div>
@@ -1081,7 +1081,7 @@
               </div>
               <div class="input-block">
                 <label style="color:#fbbf24;">Curr DG Reading</label>
-                <input type="number" step="any" class="input-field kwh-input-field" 
+                <input type="number" step="any" class="input-field reading-input kwh-input-field" 
                        data-cat="eb" data-id="${meter.id}" data-field="dg_reading" value="${currDGVal}">
               </div>
             </div>
@@ -1137,7 +1137,7 @@
             </div>
             <div class="input-block">
               <label style="color:#10b981;">Current Reading (${dateStr})</label>
-              <input type="number" step="any" class="input-field kwh-input-field" 
+              <input type="number" step="any" class="input-field reading-input kwh-input-field" 
                      data-cat="ahu" data-id="${meter.id}" data-field="reading" value="${currVal}">
             </div>
           </div>
@@ -1151,7 +1151,7 @@
               </div>
               <div class="input-block">
                 <label style="color:#fbbf24;">Curr DG Reading</label>
-                <input type="number" step="any" class="input-field kwh-input-field" 
+                <input type="number" step="any" class="input-field reading-input kwh-input-field" 
                        data-cat="ahu" data-id="${meter.id}" data-field="dg_reading" value="${currDGVal}">
               </div>
             </div>
@@ -1202,7 +1202,7 @@
             </div>
             <div class="input-block">
               <label style="color:#f59e0b;">Current Reading (${dateStr})</label>
-              <input type="number" step="any" class="input-field kwh-input-field" 
+              <input type="number" step="any" class="input-field reading-input kwh-input-field" 
                      data-cat="btu" data-id="${meter.id}" data-field="reading" value="${currVal}">
             </div>
           </div>
@@ -3149,9 +3149,9 @@
       });
     }
 
-    // Daily Reading Inputs Change
-    document.querySelectorAll('.reading-input').forEach(input => {
-      input.addEventListener('change', (e) => {
+    // Daily Reading Inputs Change & Real-Time Input Update
+    document.querySelectorAll('.reading-input, .kwh-input-field').forEach(input => {
+      const handleReadingChange = (e) => {
         const cat = e.target.dataset.cat;
         const id = parseInt(e.target.dataset.id);
         const field = e.target.dataset.field || 'reading';
@@ -3186,11 +3186,13 @@
             });
 
             saveData(false);
-            showToast(`Updated ${item.name || cat} reading: ${val}`);
+            showToast(`Saved ${item.name || cat} reading: ${val}`);
             render();
           }
         }
-      });
+      };
+
+      input.addEventListener('change', handleReadingChange);
     });
 
     // AHU Schedule Changes
@@ -3271,7 +3273,7 @@
         ensureDateStructure(dateStr);
 
         // Harvest all current inputs on screen directly from DOM
-        document.querySelectorAll('.reading-input').forEach(input => {
+        document.querySelectorAll('.reading-input, .kwh-input-field').forEach(input => {
           const cat = input.dataset.cat;
           const id = parseInt(input.dataset.id);
           const field = input.dataset.field || 'reading';
