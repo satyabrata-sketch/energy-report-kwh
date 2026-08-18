@@ -132,12 +132,16 @@
     const currKWH = state.data.kwh_daily[dateStr] || {};
     const ahuCons = {};
     const btuCons = {};
+    const dgCons = {};
 
     [1, 2, 3, 4].forEach(id => {
       const prevInfoA = getExactPreviousReading(dateStr, 'ahu', id);
       const currAHU = currKWH.ahu?.find(a => a.id === id) || {};
       const currValA = currAHU.reading !== undefined ? Number(currAHU.reading) : prevInfoA.reading;
+      const currDGA = currAHU.dg_reading !== undefined ? Number(currAHU.dg_reading) : prevInfoA.dg_reading;
+      
       ahuCons[`AHU${id}`] = Math.max(0, currValA - prevInfoA.reading);
+      dgCons[`AHU${id}`] = Math.max(0, currDGA - prevInfoA.dg_reading);
 
       const prevInfoB = getExactPreviousReading(dateStr, 'btu', id);
       const currBTU = currKWH.btu?.find(b => b.id === id) || {};
@@ -145,8 +149,10 @@
       btuCons[`AHU${id}`] = Math.max(0, currValB - prevInfoB.reading);
     });
 
-    return { ahuCons, btuCons };
+    return { ahuCons, btuCons, dgCons };
   }
+
+  
   function ensureDateStructure(dateStr) {
     if (!state.data.kwh_daily[dateStr]) {
       state.data.kwh_daily[dateStr] = {
@@ -288,15 +294,17 @@
     const isSun = dayStr === 'Sun';
     const isSat = dayStr === 'Sat';
 
+    // Standard Planned Turn-Off: 8:00 PM (20:00) on weekdays, 2:00 PM (14:00) on Saturdays, 0 on Sunday
     const stdSched = isSun ? 0 : (isSat ? 6 : 12);
-    const stdOffHour = isSat ? 14 : 20;
+    const stdOffHour = isSat ? 14.0 : 20.0;
 
     const autoCons = getAutoKWHConsumptionsForDate(dayRec.date);
 
     let totSched = 0, totRun = 0, totSaved = 0;
     let totAHUKwh = 0, totAHUCost = 0, totAHUSaved = 0;
-    let totBTUKwh = 0, totBTUCost = 0, totBTUSaved = 0;
-    let totCombSaved = 0, totCombFull = 0;
+    let totBTUUnits = 0, totBTUCost = 0, totBTUSaved = 0;
+    let totDGKwh = 0, totDGCost = 0, totDGSaved = 0;
+    let totCombSaved = 0, totCombFull = 0, totActualCost = 0;
 
     const ahusComputed = (dayRec.ahus || []).map((ahu) => {
       const onStr = ahu.on_time || "OFF";
@@ -313,33 +321,50 @@
 
         runHrs = Math.max(0, offVal - onVal);
 
+        // If planned turn off is 8:00 PM (20.00) and off at 19:45 (19.75), saved = 0.25 hrs (15 mins)
         if (!isSun) {
           savedHrs = Math.max(0, stdOffHour - offVal);
         }
       }
 
+      // 1. AHU Difference KWH * 7.45 rupees
       const ahuKwh = ahu.kwh_cons !== undefined && ahu.kwh_cons !== null
         ? Number(ahu.kwh_cons) 
         : (autoCons.ahuCons[ahu.ahu_id] || 0);
+      const ahuCost = ahuKwh * 7.45;
 
-      const kwhRate = Number(dayRec.kwh_rate || state.rates.kwh);
-      const ahuCost = ahuKwh * kwhRate;
-      const ahuRatePerHr = runHrs > 0 ? (ahuCost / runHrs) : 0;
-      const ahuFullCost8pm = ahuCost + (savedHrs * ahuRatePerHr);
-      const ahuCostSaved = savedHrs * ahuRatePerHr;
-
+      // 2. BTU Difference * 40% * 10.75 rupees (effective rate 4.30)
       const btuUnits = ahu.btu_cons !== undefined && ahu.btu_cons !== null
         ? Number(ahu.btu_cons)
         : (autoCons.btuCons[ahu.ahu_id] || 0);
+      const btuCost = btuUnits * 0.40 * 10.75;
 
-      const btuRate = Number(dayRec.btu_rate || state.rates.btu);
-      const btuCost = btuUnits * btuRate;
+      // 3. DG Difference * 33.85 rupees
+      const dgKwh = ahu.dg_cons !== undefined && ahu.dg_cons !== null
+        ? Number(ahu.dg_cons)
+        : (autoCons.dgCons[ahu.ahu_id] || 0);
+      const dgCost = dgKwh * 33.85;
+
+      // Total Actual Day Cost for this AHU
+      const ahuDayActualCost = ahuCost + btuCost + dgCost;
+
+      // Hourly Cost Rate during actual running period
+      const costPerHr = runHrs > 0 ? (ahuDayActualCost / runHrs) : 0;
+      const ahuRatePerHr = runHrs > 0 ? (ahuCost / runHrs) : 0;
       const btuRatePerHr = runHrs > 0 ? (btuCost / runHrs) : 0;
-      const btuFullCost8pm = btuCost + (savedHrs * btuRatePerHr);
-      const btuCostSaved = savedHrs * btuRatePerHr;
+      const dgRatePerHr = runHrs > 0 ? (dgCost / runHrs) : 0;
 
-      const totCostSavedToday = ahuCostSaved + btuCostSaved;
-      const totFullCost8pmToday = ahuFullCost8pm + btuFullCost8pm;
+      // Cost Saved for actual hours / minutes saved
+      const costSaved = savedHrs * costPerHr;
+      const ahuCostSaved = savedHrs * ahuRatePerHr;
+      const btuCostSaved = savedHrs * btuRatePerHr;
+      const dgCostSaved = savedHrs * dgRatePerHr;
+
+      const ahuFullCost8pm = ahuDayActualCost + costSaved;
+
+      const savedMins = Math.round(savedHrs * 60);
+      const runHrsWhole = Math.floor(runHrs);
+      const runMinsRem = Math.round((runHrs - runHrsWhole) * 60);
 
       totSched += stdSched;
       totRun += runHrs;
@@ -349,30 +374,41 @@
       totAHUCost += ahuCost;
       totAHUSaved += ahuCostSaved;
 
-      totBTUKwh += btuUnits;
+      totBTUUnits += btuUnits;
       totBTUCost += btuCost;
       totBTUSaved += btuCostSaved;
 
-      totCombSaved += totCostSavedToday;
-      totCombFull += totFullCost8pmToday;
+      totDGKwh += dgKwh;
+      totDGCost += dgCost;
+      totDGSaved += dgCostSaved;
+
+      totActualCost += ahuDayActualCost;
+      totCombSaved += costSaved;
+      totCombFull += ahuFullCost8pm;
 
       return {
         ...ahu,
         kwh_cons: ahuKwh,
         btu_cons: btuUnits,
+        dg_cons: dgKwh,
         sched_hrs: stdSched,
         actual_run_hrs: runHrs,
+        run_hrs_text: `${runHrsWhole}h ${runMinsRem}m`,
         saved_hrs: savedHrs,
+        saved_mins: savedMins,
+        saved_text: savedMins >= 60 ? `${(savedMins/60).toFixed(1)} hrs` : `${savedMins} mins`,
         ahu_cost: ahuCost,
-        ahu_rate_per_hr: ahuRatePerHr,
-        ahu_full_cost_8pm: ahuFullCost8pm,
-        ahu_cost_saved: ahuCostSaved,
         btu_cost: btuCost,
-        btu_rate_per_hr: btuRatePerHr,
-        btu_full_cost_8pm: btuFullCost8pm,
+        dg_cost: dgCost,
+        tot_day_actual_cost: ahuDayActualCost,
+        cost_per_hr: costPerHr,
+        ahu_full_cost_8pm: ahuFullCost8pm,
+        cost_saved: costSaved,
+        ahu_cost_saved: ahuCostSaved,
         btu_cost_saved: btuCostSaved,
-        tot_cost_saved_today: totCostSavedToday,
-        tot_full_cost_8pm_today: totFullCost8pmToday
+        dg_cost_saved: dgCostSaved,
+        tot_cost_saved_today: costSaved,
+        tot_full_cost_8pm_today: ahuFullCost8pm
       };
     });
 
@@ -387,14 +423,22 @@
       tot_kwh: totAHUKwh,
       tot_ahu_cost: totAHUCost,
       tot_ahu_cost_saved: totAHUSaved,
-      tot_btu_kwh: totBTUKwh,
+      tot_btu_units: totBTUUnits,
       tot_btu_cost: totBTUCost,
       tot_btu_cost_saved: totBTUSaved,
+      tot_dg_kwh: totDGKwh,
+      tot_dg_cost: totDGCost,
+      tot_dg_cost_saved: totDGSaved,
+      tot_actual_cost: totActualCost,
       tot_comb_cost_saved: totCombSaved,
       tot_comb_full_cost: totCombFull,
+      total_saved_hrs: totSaved,
+      total_combined_saving: totCombSaved,
       savings_pct: savingsPct
     };
   }
+
+  
   function showToast(msg) {
     const existing = document.querySelector('.toast-msg');
     if (existing) existing.remove();
@@ -1160,7 +1204,7 @@
   function renderAHUSavingLogContent() {
     const dateStr = state.selectedDate;
     const rawDayRec = state.data.ahu_saving[dateStr] || {
-      date: dateStr, day: 'Mon', ahus: [], kwh_rate: state.rates.kwh, btu_rate: state.rates.btu
+      date: dateStr, day: 'Mon', ahus: [], kwh_rate: 7.45, btu_rate: 4.30
     };
 
     const computed = calculateAHUSaving(rawDayRec);
@@ -1168,62 +1212,76 @@
     const cardsHtml = (computed.ahus || []).map((ahu) => {
       return `
         <div class="meter-card ahu-theme">
-          <div class="meter-card-header">
+          <div class="meter-card-header" style="background: linear-gradient(135deg, rgba(5,150,105,0.2), rgba(15,23,42,0.6)); border-bottom: 1px solid rgba(5,150,105,0.3); padding: 0.85rem 1rem; border-radius: var(--radius-md) var(--radius-md) 0 0;">
             <div class="meter-title-wrap">
-              <div class="meter-icon-badge"><i data-lucide="fan"></i></div>
+              <div class="meter-icon-badge" style="background:rgba(5,150,105,0.2); color:#10b981; border:1px solid #10b981;"><i data-lucide="fan"></i></div>
               <div>
-                <div class="meter-title">${ahu.ahu_id} Saving & BTU Cooling Log</div>
-                <div class="meter-location-tag">Standard Sched: ${ahu.sched_hrs} hrs</div>
+                <div class="meter-title" style="font-size:1.1rem; font-weight:800; color:#fff;">${ahu.ahu_id} Operational & Cost Savings Engine</div>
+                <div class="meter-location-tag" style="color:#94a3b8; font-size:0.75rem;">Standard Sched: <strong>${ahu.sched_hrs} hrs</strong> (Planned Turn-Off: 8:00 PM)</div>
               </div>
+            </div>
+            <div style="text-align:right;">
+              <span style="background:rgba(16,185,129,0.15); border:1px solid #10b981; color:#10b981; padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.75rem; font-weight:700;">
+                💰 Saved: ₹${ahu.cost_saved.toFixed(2)}
+              </span>
             </div>
           </div>
 
-          <div class="reading-inputs-grid">
+          <div class="reading-inputs-grid" style="padding: 1rem 1rem 0.5rem 1rem;">
             <div class="input-block">
               <label style="color:#ffffff; font-weight:700;"><i data-lucide="clock" style="width:14px; height:14px; color:#10b981; display:inline-block; vertical-align:middle; margin-right:4px;"></i> ON Time (hh:mm)</label>
               <input type="time" class="input-field ahu-time-input" 
-                     data-ahu="${ahu.ahu_id}" data-field="on_time" value="${ahu.on_time || '07:12'}">
+                     data-ahu="${ahu.ahu_id}" data-field="on_time" value="${ahu.on_time || '07:00'}">
             </div>
             <div class="input-block">
               <label style="color:#ffffff; font-weight:700;"><i data-lucide="clock" style="width:14px; height:14px; color:#ef4444; display:inline-block; vertical-align:middle; margin-right:4px;"></i> OFF Time (hh:mm)</label>
               <input type="time" class="input-field ahu-time-input" 
-                     data-ahu="${ahu.ahu_id}" data-field="off_time" value="${ahu.off_time || '20:00'}">
+                     data-ahu="${ahu.ahu_id}" data-field="off_time" value="${ahu.off_time || '19:45'}">
             </div>
           </div>
 
-          <div class="reading-inputs-grid" style="margin-bottom:1rem;">
+          <div class="reading-inputs-grid" style="padding: 0 1rem 0.75rem 1rem;">
             <div class="input-block">
-              <label style="color:#10b981;">AHU Power Consumed (kWh) <span class="auto-tag">(Auto/Edit)</span></label>
+              <label style="color:#34d399; font-weight:600;">⚡ AHU Power (kWh × ₹7.45)</label>
               <input type="number" step="any" class="input-field ahu-cons-input" 
                      data-ahu="${ahu.ahu_id}" data-field="kwh_cons" value="${ahu.kwh_cons}">
+              <span style="font-size:0.72rem; color:#94a3b8;">Cost: ₹${ahu.ahu_cost.toFixed(2)}</span>
             </div>
             <div class="input-block">
-              <label style="color:#f59e0b;">BTU Cooling Consumed (kWh) <span class="auto-tag">(Auto/Edit)</span></label>
+              <label style="color:#38bdf8; font-weight:600;">🧊 BTU Cooling (Units × 40% × ₹10.75)</label>
               <input type="number" step="any" class="input-field ahu-cons-input" 
                      data-ahu="${ahu.ahu_id}" data-field="btu_cons" value="${ahu.btu_cons}">
+              <span style="font-size:0.72rem; color:#94a3b8;">Cost: ₹${ahu.btu_cost.toFixed(2)} (Effective ₹4.30/unit)</span>
             </div>
           </div>
 
-          <div class="results-strip" style="flex-wrap:wrap; gap:0.5rem; background:rgba(0,0,0,0.4);">
-            <div class="res-item">
-              <span class="res-label">Actual Run Hrs</span>
-              <span class="res-value">${ahu.actual_run_hrs.toFixed(1)} hrs</span>
+          <div class="results-strip" style="flex-wrap:wrap; gap:0.5rem; background:rgba(0,0,0,0.5); padding:0.75rem 1rem; border-radius:0 0 var(--radius-md) var(--radius-md); border-top:1px solid rgba(255,255,255,0.08);">
+            <div class="res-item" style="flex:1; min-width:110px;">
+              <span class="res-label" style="font-size:0.7rem; color:#94a3b8;">Actual Run Time</span>
+              <span class="res-value" style="color:#f3f4f6; font-weight:700;">${ahu.run_hrs_text} <span style="font-size:0.75rem; color:#94a3b8;">(${ahu.actual_run_hrs.toFixed(2)}h)</span></span>
             </div>
-            <div class="res-item">
-              <span class="res-label">Saved Hrs Today</span>
-              <span class="res-value highlight" style="color:var(--ahu-color);">${ahu.saved_hrs.toFixed(1)} hrs</span>
+            <div class="res-item" style="flex:1; min-width:110px;">
+              <span class="res-label" style="font-size:0.7rem; color:#94a3b8;">Saved Time Today</span>
+              <span class="res-value highlight" style="color:#10b981; font-weight:800;">⏱️ ${ahu.saved_text}</span>
             </div>
-            <div class="res-item">
-              <span class="res-label">AHU Cost Saved</span>
-              <span class="res-value" style="color:#34d399;">₹${ahu.ahu_cost_saved.toFixed(0)}</span>
+            <div class="res-item" style="flex:1; min-width:110px;">
+              <span class="res-label" style="font-size:0.7rem; color:#94a3b8;">Hourly Cost Rate</span>
+              <span class="res-value" style="color:#cbd5e1;">₹${ahu.cost_per_hr.toFixed(2)}/hr</span>
             </div>
-            <div class="res-item">
-              <span class="res-label">BTU Cost Saved</span>
-              <span class="res-value" style="color:#fbbf24;">₹${ahu.btu_cost_saved.toFixed(0)}</span>
+            <div class="res-item" style="flex:1; min-width:110px;">
+              <span class="res-label" style="font-size:0.7rem; color:#94a3b8;">AHU Power Saved</span>
+              <span class="res-value" style="color:#34d399;">₹${ahu.ahu_cost_saved.toFixed(2)}</span>
             </div>
-            <div class="res-item" style="text-align:right; width:100%; border-top:1px dashed var(--border-color); padding-top:0.4rem; margin-top:0.2rem;">
-              <span class="res-label">Total Cost Saved Today (AHU + BTU)</span>
-              <span class="res-value" style="color:#00e5ff; font-size:1.1rem;">₹${ahu.tot_cost_saved_today.toFixed(0)}</span>
+            <div class="res-item" style="flex:1; min-width:110px;">
+              <span class="res-label" style="font-size:0.7rem; color:#94a3b8;">BTU Cooling Saved</span>
+              <span class="res-value" style="color:#38bdf8;">₹${ahu.btu_cost_saved.toFixed(2)}</span>
+            </div>
+            <div class="res-item" style="text-align:right; width:100%; border-top:1px dashed rgba(255,255,255,0.15); padding-top:0.5rem; margin-top:0.25rem; display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:0.8rem; color:#94a3b8;">Full Day Cost if Run till 8:00 PM: <strong style="color:#e2e8f0;">₹${ahu.ahu_full_cost_8pm.toFixed(2)}</strong></span>
+              <div>
+                <span class="res-label" style="font-size:0.75rem; color:#10b981; margin-right:0.4rem;">Total Cost Saved:</span>
+                <span class="res-value" style="color:#00e5ff; font-size:1.15rem; font-weight:800;">₹${ahu.cost_saved.toFixed(2)}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1231,40 +1289,40 @@
     }).join('');
 
     return `
-      <div class="category-summary-banner">
+      <div class="category-summary-banner" style="background: linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.9)); border: 1px solid rgba(5,150,105,0.4); border-radius: var(--radius-lg); padding: 1.25rem; box-shadow: 0 10px 25px rgba(0,0,0,0.4);">
         <div class="summary-stat-box">
-          <div class="stat-label">Total Scheduled Hours</div>
+          <div class="stat-label">Total Sched Hours</div>
           <div class="stat-val">${computed.tot_sched} hrs</div>
         </div>
         <div class="summary-stat-box">
           <div class="stat-label">Total Actual Run Hours</div>
-          <div class="stat-val">${computed.tot_run.toFixed(1)} hrs</div>
+          <div class="stat-val">${computed.tot_run.toFixed(2)} hrs</div>
         </div>
         <div class="summary-stat-box">
-          <div class="stat-label">Total Saved Hours Today</div>
-          <div class="stat-val" style="color:var(--ahu-color);">${computed.tot_saved.toFixed(1)} hrs</div>
+          <div class="stat-label">Total Saved Time Today</div>
+          <div class="stat-val" style="color:#10b981;">⏱️ ${computed.tot_saved >= 1 ? computed.tot_saved.toFixed(2) + ' hrs' : Math.round(computed.tot_saved * 60) + ' mins'}</div>
         </div>
         <div class="summary-stat-box">
-          <div class="stat-label">AHU Power Saved (₹)</div>
+          <div class="stat-label">AHU Power Saved (₹7.45)</div>
           <div class="stat-val" style="color:#34d399;">₹${computed.tot_ahu_cost_saved.toFixed(2)}</div>
         </div>
         <div class="summary-stat-box">
-          <div class="stat-label">BTU Cooling Saved (₹)</div>
-          <div class="stat-val" style="color:#fbbf24;">₹${computed.tot_btu_cost_saved.toFixed(2)}</div>
+          <div class="stat-label">BTU Cooling Saved (40%*10.75)</div>
+          <div class="stat-val" style="color:#38bdf8;">₹${computed.tot_btu_cost_saved.toFixed(2)}</div>
         </div>
         <div class="summary-stat-box">
-          <div class="stat-label">Total Combined Savings (₹)</div>
-          <div class="stat-val" style="color:#00e5ff;">₹${computed.tot_comb_cost_saved.toFixed(2)}</div>
+          <div class="stat-label">Total Combined Savings</div>
+          <div class="stat-val" style="color:#00e5ff; font-weight:800;">₹${computed.tot_comb_cost_saved.toFixed(2)}</div>
         </div>
         <div class="summary-stat-box">
-          <div class="stat-label">Combined Savings %</div>
+          <div class="stat-label">Savings Efficiency %</div>
           <div class="stat-val" style="color:#60a5fa;">${(computed.savings_pct * 100).toFixed(1)}%</div>
         </div>
       </div>
 
-      <div class="section-header-title ahu-header">
+      <div class="section-header-title ahu-header" style="margin-top:1.25rem;">
         <h2><i data-lucide="fan"></i> Operational AHU & BTU Cooling Cost Savings Engine</h2>
-        <span style="font-size:0.8rem; font-weight:normal;">Auto-synced from Daily KWH Tracker + Manual Edit Support</span>
+        <span style="font-size:0.8rem; font-weight:normal; color:#94a3b8;">Auto-calculated: AHU Diff × ₹7.45 + BTU Diff × 40% × ₹10.75 + DG × ₹33.85 | Saved from Planned 8:00 PM Turn-Off</span>
       </div>
 
       <div class="section-grid">${cardsHtml}</div>
@@ -1277,8 +1335,7 @@
     `;
   }
 
-  // 3. Render Transaction History & Audit Trail Content
-
+  
   function renderTransactionHistoryContent() {
     const txns = state.data.transactions || [];
     const todayStr = new Date().toISOString().slice(0, 10);
