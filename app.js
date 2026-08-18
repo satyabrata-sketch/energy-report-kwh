@@ -519,7 +519,7 @@
       });
     },
 
-    // Pull latest data from cloud
+    // Pull latest data from cloud with smart conflict resolution
     pull: function (manual) {
       if (!window.location.protocol.startsWith('http')) {
         state.cloudSync.status = 'synced';
@@ -548,7 +548,17 @@
         .then(json => {
           if (json && json.data) {
             const cloudData = json.data;
-            const cloudVersion = json.version || 0;
+            const cloudVersion = Number(json.version) || 0;
+            const localVersion = Number(state.data.version) || 0;
+
+            // If local has newer un-pushed edits, push to cloud instead of overwriting local!
+            if (localVersion > cloudVersion && (localVersion - cloudVersion > 2000)) {
+              console.log('Local version newer than cloud, pushing to cloud:', localVersion, cloudVersion);
+              window.CloudSync.push(false);
+              state.cloudSync.status = 'synced';
+              this.updateHeaderSyncUI();
+              return;
+            }
 
             let hasChanges = false;
             let updatedDates = [];
@@ -575,10 +585,13 @@
                         hasChanges = true;
                         if (!updatedDates.includes(d)) updatedDates.push(d);
                       } else if (cm.reading !== undefined && cm.reading !== lm.reading) {
-                        lm.reading = cm.reading;
-                        if (cm.dg_reading !== undefined) lm.dg_reading = cm.dg_reading;
-                        hasChanges = true;
-                        if (!updatedDates.includes(d)) updatedDates.push(d);
+                        // Only accept cloud change if cloud is newer or equal
+                        if (cloudVersion >= localVersion) {
+                          lm.reading = cm.reading;
+                          if (cm.dg_reading !== undefined) lm.dg_reading = cm.dg_reading;
+                          hasChanges = true;
+                          if (!updatedDates.includes(d)) updatedDates.push(d);
+                        }
                       }
                     });
                   }
@@ -601,7 +614,7 @@
                     if (!la) {
                       localAHU.ahus.push(ca);
                       hasChanges = true;
-                    } else {
+                    } else if (cloudVersion >= localVersion) {
                       if (ca.on_time !== la.on_time || ca.off_time !== la.off_time || ca.kwh_cons !== la.kwh_cons || ca.btu_cons !== la.btu_cons) {
                         la.on_time = ca.on_time;
                         la.off_time = ca.off_time;
@@ -627,7 +640,8 @@
             }
 
             if (hasChanges || cloudVersion > state.cloudSync.lastCloudVersion) {
-              state.cloudSync.lastCloudVersion = Math.max(cloudVersion, state.cloudSync.lastCloudVersion);
+              state.data.version = Math.max(cloudVersion, localVersion);
+              state.cloudSync.lastCloudVersion = state.data.version;
               recalculateDynamicSummaryMatrix();
               localStorage.setItem('kwh_ahu_tracker_data_v2', JSON.stringify(state.data));
               if (manual) {
@@ -762,9 +776,10 @@
       state.data.transactions = [];
     }
 
+    const savedDate = localStorage.getItem('kwh_selected_date');
     const todayStr = new Date().toISOString().slice(0, 10);
-    state.selectedDate = todayStr;
-    state.selectedMonthMatrix = dateToMonthKey(todayStr) || 'Aug-26';
+    state.selectedDate = (savedDate && savedDate.length === 10) ? savedDate : todayStr;
+    state.selectedMonthMatrix = dateToMonthKey(state.selectedDate) || 'Aug-26';
     state.monthDashboard.selectedMonth = state.selectedMonthMatrix;
 
     ensureDateStructure(todayStr);
@@ -777,6 +792,8 @@
 
   // Save Data locally and push to cloud
   function saveData(skipBackend) {
+    state.data.version = Date.now();
+    state.cloudSync.lastCloudVersion = state.data.version;
     recalculateDynamicSummaryMatrix();
     localStorage.setItem('kwh_ahu_tracker_data_v2', JSON.stringify(state.data));
 
@@ -2861,6 +2878,7 @@
         const val = e.target.value;
         if (val) {
           state.selectedDate = val;
+          localStorage.setItem('kwh_selected_date', val);
           state.selectedMonthMatrix = dateToMonthKey(val) || 'Aug-26';
           state.monthDashboard.selectedMonth = state.selectedMonthMatrix;
           ensureDateStructure(val);
@@ -3249,18 +3267,53 @@
     const saveKwhBtn = document.getElementById('btn-save-kwh');
     if (saveKwhBtn) {
       saveKwhBtn.addEventListener('click', () => {
+        const dateStr = state.selectedDate;
+        ensureDateStructure(dateStr);
+
+        // Harvest all current inputs on screen directly from DOM
+        document.querySelectorAll('.reading-input').forEach(input => {
+          const cat = input.dataset.cat;
+          const id = parseInt(input.dataset.id);
+          const field = input.dataset.field || 'reading';
+          const val = parseFloat(input.value) || 0;
+
+          const mList = state.data.kwh_daily[dateStr]?.[cat];
+          if (mList) {
+            const item = mList.find(x => x.id === id);
+            if (item) item[field] = val;
+          }
+        });
+
         saveData(false);
         window.CloudSync.push(true);
         showToast(`✅ All Daily KWH Readings for ${state.selectedDate} saved & cloud-synced!`);
+        render();
       });
     }
 
     const saveAhuBtn = document.getElementById('btn-save-ahu');
     if (saveAhuBtn) {
       saveAhuBtn.addEventListener('click', () => {
+        const dateStr = state.selectedDate;
+        const dayRec = state.data.ahu_saving[dateStr];
+
+        if (dayRec && dayRec.ahus) {
+          document.querySelectorAll('.ahu-time-input, .ahu-cons-input').forEach(input => {
+            const ahuId = input.dataset.ahu;
+            const field = input.dataset.field;
+            const val = input.value;
+
+            const ahu = dayRec.ahus.find(x => x.ahu_id === ahuId);
+            if (ahu) {
+              ahu[field] = (field === 'kwh_cons' || field === 'btu_cons') ? (parseFloat(val) || 0) : val;
+            }
+          });
+        }
+
         saveData(false);
         window.CloudSync.push(true);
         showToast(`✅ AHU Operating Schedule for ${state.selectedDate} saved & cloud-synced!`);
+        render();
       });
     }
 
