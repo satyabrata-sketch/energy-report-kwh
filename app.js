@@ -129,26 +129,24 @@
 
   // Helper: Get auto-calculated KWH consumptions for AHU calculations
   function getAutoKWHConsumptionsForDate(dateStr) {
-    const dayKWH = state.data.kwh_daily[dateStr];
-    const res = { ahu: [0, 0, 0, 0], btu: [0, 0, 0, 0] };
-    if (!dayKWH) return res;
+    const currKWH = state.data.kwh_daily[dateStr] || {};
+    const ahuCons = {};
+    const btuCons = {};
 
-    (dayKWH.ahu || []).forEach(m => {
-      const prev = getExactPreviousReading(dateStr, 'ahu', m.id);
-      const cons = Math.max(0, (Number(m.reading) || 0) - prev.reading);
-      if (m.id >= 1 && m.id <= 4) res.ahu[m.id - 1] = cons;
+    [1, 2, 3, 4].forEach(id => {
+      const prevInfoA = getExactPreviousReading(dateStr, 'ahu', id);
+      const currAHU = currKWH.ahu?.find(a => a.id === id) || {};
+      const currValA = currAHU.reading !== undefined ? Number(currAHU.reading) : prevInfoA.reading;
+      ahuCons[`AHU${id}`] = Math.max(0, currValA - prevInfoA.reading);
+
+      const prevInfoB = getExactPreviousReading(dateStr, 'btu', id);
+      const currBTU = currKWH.btu?.find(b => b.id === id) || {};
+      const currValB = currBTU.reading !== undefined ? Number(currBTU.reading) : prevInfoB.reading;
+      btuCons[`AHU${id}`] = Math.max(0, currValB - prevInfoB.reading);
     });
 
-    (dayKWH.btu || []).forEach(m => {
-      const prev = getExactPreviousReading(dateStr, 'btu', m.id);
-      const cons = Math.max(0, (Number(m.reading) || 0) - prev.reading);
-      if (m.id >= 1 && m.id <= 4) res.btu[m.id - 1] = cons;
-    });
-
-    return res;
+    return { ahuCons, btuCons };
   }
-
-  // Ensure Date Structure Exists for Given Date
   function ensureDateStructure(dateStr) {
     if (!state.data.kwh_daily[dateStr]) {
       state.data.kwh_daily[dateStr] = {
@@ -192,28 +190,26 @@
 
     if (!state.data.ahu_saving[dateStr]) {
       const dt = new Date(dateStr);
-      const isSun = dt.getDay() === 0;
-      const isSat = dt.getDay() === 6;
-      const defaultOn = isSun ? "00:00" : (isSat ? "08:00" : "07:00");
-      const defaultOff = isSun ? "00:00" : (isSat ? "14:00" : "19:30");
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const dayStr = dayNames[dt.getDay()];
+      const autoCons = getAutoKWHConsumptionsForDate(dateStr);
 
       state.data.ahu_saving[dateStr] = {
         date: dateStr,
-        day: dt.toLocaleString('en-US', { weekday: 'short' }),
+        day: dayStr,
+        ahus: [
+          { ahu_id: "AHU1", on_time: "07:12", off_time: "20:00", kwh_cons: autoCons.ahuCons["AHU1"], btu_cons: autoCons.btuCons["AHU1"] },
+          { ahu_id: "AHU2", on_time: "07:12", off_time: "20:00", kwh_cons: autoCons.ahuCons["AHU2"], btu_cons: autoCons.btuCons["AHU2"] },
+          { ahu_id: "AHU3", on_time: "07:12", off_time: "18:33", kwh_cons: autoCons.ahuCons["AHU3"], btu_cons: autoCons.btuCons["AHU3"] },
+          { ahu_id: "AHU4", on_time: "07:12", off_time: "18:03", kwh_cons: autoCons.ahuCons["AHU4"], btu_cons: autoCons.btuCons["AHU4"] }
+        ],
         kwh_rate: state.rates.kwh,
-        btu_rate: state.rates.btu,
-        ahus: [1, 2, 3, 4].map(id => ({
-          id: id,
-          name: `AHU-${id} (CFM 26500)`,
-          on_time: defaultOn,
-          off_time: defaultOff,
-          is_off: isSun
-        }))
+        btu_rate: state.rates.btu
       };
     }
   }
 
-  // Recalculate Dynamic Summary Matrix
+  // Real-Time Transaction Logging Engine
   function recalculateDynamicSummaryMatrix() {
     const kwhDaily = state.data.kwh_daily || {};
     const monthMap = {}; // { 'Aug-26': { eb: 0, ahu: 0, dg: 0, btu: 0 } }
@@ -288,109 +284,117 @@
 
   // Calculate AHU Savings for a date
   function calculateAHUSaving(dayRec) {
-    const isSun = dayRec.day === 'Sun';
-    const isSat = dayRec.day === 'Sat';
+    const dayStr = dayRec.day;
+    const isSun = dayStr === 'Sun';
+    const isSat = dayStr === 'Sat';
+
     const stdSched = isSun ? 0 : (isSat ? 6 : 12);
-    const targetOffDecimal = isSat ? 14.0 : 20.0;
+    const stdOffHour = isSat ? 14 : 20;
 
     const autoCons = getAutoKWHConsumptionsForDate(dayRec.date);
-    const results = [];
-    let totActualCost = 0, totFullCost = 0, totCostSaving = 0, totSavedHrs = 0, totActualHrs = 0;
-    let totBTUActualCost = 0, totBTUFullCost = 0, totBTUCostSaving = 0, totBTUCons = 0;
 
-    (dayRec.ahus || []).forEach((ahu, idx) => {
-      const isOff = isSun || ahu.is_off || ahu.on_time === "OFF" || ahu.off_time === "OFF";
+    let totSched = 0, totRun = 0, totSaved = 0;
+    let totAHUKwh = 0, totAHUCost = 0, totAHUSaved = 0;
+    let totBTUKwh = 0, totBTUCost = 0, totBTUSaved = 0;
+    let totCombSaved = 0, totCombFull = 0;
+
+    const ahusComputed = (dayRec.ahus || []).map((ahu) => {
+      const onStr = ahu.on_time || "OFF";
+      const offStr = ahu.off_time || "OFF";
+
       let runHrs = 0;
       let savedHrs = 0;
 
-      if (!isOff && ahu.on_time && ahu.off_time) {
-        const onStr = ahu.on_time || "07:00";
-        const offStr = ahu.off_time || "19:00";
+      if (onStr !== "OFF" && offStr !== "OFF" && onStr && offStr) {
         const [onH, onM] = onStr.split(':').map(Number);
         const [offH, offM] = offStr.split(':').map(Number);
         const onVal = onH + (onM || 0) / 60;
         const offVal = offH + (offM || 0) / 60;
+
         runHrs = Math.max(0, offVal - onVal);
 
         if (!isSun) {
-          savedHrs = Math.max(0, targetOffDecimal - offVal);
+          savedHrs = Math.max(0, stdOffHour - offVal);
         }
       }
 
-      const kwhCons = autoCons.ahu[idx] || 0;
-      const btuCons = autoCons.btu[idx] || 0;
+      const ahuKwh = ahu.kwh_cons !== undefined && ahu.kwh_cons !== null
+        ? Number(ahu.kwh_cons) 
+        : (autoCons.ahuCons[ahu.ahu_id] || 0);
 
       const kwhRate = Number(dayRec.kwh_rate || state.rates.kwh);
-      const ahuCost = kwhCons * kwhRate;
+      const ahuCost = ahuKwh * kwhRate;
       const ahuRatePerHr = runHrs > 0 ? (ahuCost / runHrs) : 0;
       const ahuFullCost8pm = ahuCost + (savedHrs * ahuRatePerHr);
-      const ahuSaving = savedHrs * ahuRatePerHr;
+      const ahuCostSaved = savedHrs * ahuRatePerHr;
 
-      totActualCost += ahuCost;
-      totFullCost += ahuFullCost8pm;
-      totCostSaving += ahuSaving;
-      totSavedHrs += savedHrs;
-      totActualHrs += runHrs;
+      const btuUnits = ahu.btu_cons !== undefined && ahu.btu_cons !== null
+        ? Number(ahu.btu_cons)
+        : (autoCons.btuCons[ahu.ahu_id] || 0);
 
       const btuRate = Number(dayRec.btu_rate || state.rates.btu);
-      const btuCost = btuCons * btuRate;
+      const btuCost = btuUnits * btuRate;
       const btuRatePerHr = runHrs > 0 ? (btuCost / runHrs) : 0;
       const btuFullCost8pm = btuCost + (savedHrs * btuRatePerHr);
-      const btuSaving = savedHrs * btuRatePerHr;
+      const btuCostSaved = savedHrs * btuRatePerHr;
 
-      totBTUActualCost += btuCost;
-      totBTUFullCost += btuFullCost8pm;
-      totBTUCostSaving += btuSaving;
-      totBTUCons += btuCons;
+      const totCostSavedToday = ahuCostSaved + btuCostSaved;
+      const totFullCost8pmToday = ahuFullCost8pm + btuFullCost8pm;
 
-      results.push({
-        id: ahu.id,
-        name: ahu.name,
-        on_time: ahu.on_time,
-        off_time: ahu.off_time,
-        is_off: isOff,
+      totSched += stdSched;
+      totRun += runHrs;
+      totSaved += savedHrs;
+
+      totAHUKwh += ahuKwh;
+      totAHUCost += ahuCost;
+      totAHUSaved += ahuCostSaved;
+
+      totBTUKwh += btuUnits;
+      totBTUCost += btuCost;
+      totBTUSaved += btuCostSaved;
+
+      totCombSaved += totCostSavedToday;
+      totCombFull += totFullCost8pmToday;
+
+      return {
+        ...ahu,
+        kwh_cons: ahuKwh,
+        btu_cons: btuUnits,
         sched_hrs: stdSched,
-        run_hrs: Number(runHrs.toFixed(2)),
-        saved_hrs: Number(savedHrs.toFixed(2)),
-        consumption: Number(kwhCons.toFixed(1)),
-        cost: Number(ahuCost.toFixed(2)),
-        rate_per_hr: Number(ahuRatePerHr.toFixed(2)),
-        full_cost_8pm: Number(ahuFullCost8pm.toFixed(2)),
-        cost_saving: Number(ahuSaving.toFixed(2)),
-        btu_consumption: Number(btuCons.toFixed(1)),
-        btu_cost: Number(btuCost.toFixed(2)),
-        btu_rate_per_hr: Number(btuRatePerHr.toFixed(2)),
-        btu_full_cost_8pm: Number(btuFullCost8pm.toFixed(2)),
-        btu_cost_saving: Number(btuSaving.toFixed(2))
-      });
+        actual_run_hrs: runHrs,
+        saved_hrs: savedHrs,
+        ahu_cost: ahuCost,
+        ahu_rate_per_hr: ahuRatePerHr,
+        ahu_full_cost_8pm: ahuFullCost8pm,
+        ahu_cost_saved: ahuCostSaved,
+        btu_cost: btuCost,
+        btu_rate_per_hr: btuRatePerHr,
+        btu_full_cost_8pm: btuFullCost8pm,
+        btu_cost_saved: btuCostSaved,
+        tot_cost_saved_today: totCostSavedToday,
+        tot_full_cost_8pm_today: totFullCost8pmToday
+      };
     });
 
-    const totCombActual = totActualCost + totBTUActualCost;
-    const totCombFull = totFullCost + totBTUFullCost;
-    const totCombSaved = totCostSaving + totBTUCostSaving;
     const savingsPct = totCombFull > 0 ? (totCombSaved / totCombFull) : 0;
 
     return {
-      date: dayRec.date,
-      day: dayRec.day,
-      ahus: results,
-      total_actual_cost: totActualCost,
-      total_full_cost: totFullCost,
-      total_cost_saving: totCostSaving,
-      total_saved_hrs: totSavedHrs,
-      total_actual_hrs: totActualHrs,
-      total_btu_actual_cost: totBTUActualCost,
-      total_btu_full_cost: totBTUFullCost,
-      total_btu_cost_saving: totBTUCostSaving,
-      total_btu_consumption: totBTUCons,
-      total_combined_actual_cost: totCombActual,
-      total_combined_full_cost: totCombFull,
-      total_combined_saving: totCombSaved,
-      savings_percentage: savingsPct
+      ...dayRec,
+      ahus: ahusComputed,
+      tot_sched: totSched,
+      tot_run: totRun,
+      tot_saved: totSaved,
+      tot_kwh: totAHUKwh,
+      tot_ahu_cost: totAHUCost,
+      tot_ahu_cost_saved: totAHUSaved,
+      tot_btu_kwh: totBTUKwh,
+      tot_btu_cost: totBTUCost,
+      tot_btu_cost_saved: totBTUSaved,
+      tot_comb_cost_saved: totCombSaved,
+      tot_comb_full_cost: totCombFull,
+      savings_pct: savingsPct
     };
   }
-
-  // Toast notification helper
   function showToast(msg) {
     const existing = document.querySelector('.toast-msg');
     if (existing) existing.remove();
@@ -1662,8 +1666,8 @@
       const dayRec = state.data.ahu_saving[dStr];
       if (dayRec) {
         const c = calculateAHUSaving(dayRec);
-        monthAHUSavedHrs += c.total_saved_hrs;
-        monthAHUSavedCost += c.total_combined_saving;
+        monthAHUSavedHrs += (c.tot_saved !== undefined ? c.tot_saved : (c.total_saved_hrs || 0));
+        monthAHUSavedCost += (c.tot_comb_cost_saved !== undefined ? c.tot_comb_cost_saved : (c.total_combined_saving || 0));
       }
     });
 
@@ -3052,9 +3056,10 @@
     });
 
     // AHU Schedule Changes
-    document.querySelectorAll('.time-input').forEach(input => {
+        // AHU Saving Tracker Time & Consumption Inputs Change
+    document.querySelectorAll('.ahu-time-input').forEach(input => {
       input.addEventListener('change', (e) => {
-        const ahuId = parseInt(e.target.dataset.ahuId);
+        const ahuId = e.target.dataset.ahu;
         const field = e.target.dataset.field;
         const val = e.target.value;
         const dateStr = state.selectedDate;
@@ -3062,18 +3067,65 @@
         ensureDateStructure(dateStr);
         const dayRec = state.data.ahu_saving[dateStr];
         if (dayRec && dayRec.ahus) {
-          const ahu = dayRec.ahus.find(x => x.id === ahuId);
+          const ahu = dayRec.ahus.find(x => x.ahu_id === ahuId);
           if (ahu) {
+            const oldVal = ahu[field];
             ahu[field] = val;
+
+            recordTransaction({
+              category: 'ahu_sched',
+              categoryLabel: 'AHU Schedule Time Update',
+              meterId: ahuId,
+              meterName: `${ahuId} Operating Schedule`,
+              location: "3F",
+              details: `${ahuId} ${field} updated from ${oldVal || 'default'} to ${val}`,
+              source: 'Direct User Input'
+            });
+
             saveData(false);
-            showToast(`Updated AHU-${ahuId} ${field}: ${val}`);
+            showToast(`Updated ${ahuId} ${field}: ${val}`);
             render();
           }
         }
       });
     });
 
-    // Save Buttons in tabs
+    document.querySelectorAll('.ahu-cons-input').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const ahuId = e.target.dataset.ahu;
+        const field = e.target.dataset.field;
+        const val = parseFloat(e.target.value) || 0;
+        const dateStr = state.selectedDate;
+
+        ensureDateStructure(dateStr);
+        const dayRec = state.data.ahu_saving[dateStr];
+        if (dayRec && dayRec.ahus) {
+          const ahu = dayRec.ahus.find(x => x.ahu_id === ahuId);
+          if (ahu) {
+            const oldVal = ahu[field];
+            ahu[field] = val;
+
+            recordTransaction({
+              category: field === 'kwh_cons' ? 'ahu' : 'btu',
+              categoryLabel: field === 'kwh_cons' ? 'AHU Power Consumption' : 'BTU Cooling Consumption',
+              meterId: ahuId,
+              meterName: `${ahuId} ${field === 'kwh_cons' ? 'AHU Power' : 'BTU Cooling'}`,
+              location: "3F",
+              consumption: val,
+              cost: val * (field === 'kwh_cons' ? state.rates.kwh : state.rates.btu),
+              rate: field === 'kwh_cons' ? state.rates.kwh : state.rates.btu,
+              details: `${ahuId} manual override: ${val}`,
+              source: 'Direct User Input'
+            });
+
+            saveData(false);
+            showToast(`Updated ${ahuId} ${field}: ${val}`);
+            render();
+          }
+        }
+      });
+    });
+
     const saveKwhBtn = document.getElementById('btn-save-kwh');
     if (saveKwhBtn) {
       saveKwhBtn.addEventListener('click', () => {
