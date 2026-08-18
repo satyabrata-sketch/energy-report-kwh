@@ -461,6 +461,12 @@
 
     // Pull latest data from cloud
     pull: function (manual) {
+      if (!window.location.protocol.startsWith('http')) {
+        state.cloudSync.status = 'synced';
+        this.updateHeaderSyncUI();
+        return;
+      }
+
       state.cloudSync.status = 'syncing';
       this.updateHeaderSyncUI();
 
@@ -492,7 +498,7 @@
           state.cloudSync.status = 'synced';
           state.cloudSync.lastSyncTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
           this.updateHeaderSyncUI();
-        }
+        })
         .catch(err => {
           console.warn('Cloud pull fallback to local storage:', err);
           state.cloudSync.status = 'synced';
@@ -503,6 +509,12 @@
 
     // Push local data to cloud
     push: function (manual) {
+      if (!window.location.protocol.startsWith('http')) {
+        state.cloudSync.status = 'synced';
+        this.updateHeaderSyncUI();
+        return;
+      }
+
       state.cloudSync.status = 'syncing';
       this.updateHeaderSyncUI();
 
@@ -3239,12 +3251,6 @@
       });
     }
   }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    initData();
-    render();
-  });
-})();
 
   // Initialize on DOM Ready
   if (document.readyState === 'loading') {
