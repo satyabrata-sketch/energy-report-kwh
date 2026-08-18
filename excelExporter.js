@@ -259,7 +259,18 @@ window.ExcelExporter = {
       Number((sumCost / count).toFixed(2))
     ]);
 
-    const wsCons = XLSX.utils.aoa_to_sheet(consData);
+    // Sized columns and gridlines for Consumption Sheet
+    wsCons['!cols'] = [
+      { wch: 15 }, // Date
+      { wch: 10 }, // Day
+      { wch: 20 }, // Total EB
+      { wch: 20 }, // Total DG
+      { wch: 24 }, // Total Power Cum.
+      { wch: 20 }, // Total AHU
+      { wch: 20 }, // Total BTU
+      { wch: 22 }  // Daily Cost (INR)
+    ];
+    wsCons['!views'] = [{ showGridLines: true }];
     XLSX.utils.book_append_sheet(wb, wsCons, `${monthKey} Consumption`);
 
     // 2. Sheet 2: Raw Daily Meter Readings
@@ -294,6 +305,10 @@ window.ExcelExporter = {
     });
 
     const wsReadings = XLSX.utils.aoa_to_sheet(readingsData);
+    const readCols = [{ wch: 15 }, { wch: 10 }];
+    for (let i = 0; i < 30; i++) readCols.push({ wch: 18 });
+    wsReadings['!cols'] = readCols;
+    wsReadings['!views'] = [{ showGridLines: true }];
     XLSX.utils.book_append_sheet(wb, wsReadings, `${monthKey} Readings`);
 
     // Write file
